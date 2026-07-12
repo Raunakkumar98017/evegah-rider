@@ -6,7 +6,7 @@ import 'rent_ev_screen.dart';
 import 'vehicle_list_screen.dart';
 import 'select_location_screen.dart';
 import 'select_date_time_screen.dart';
-
+import '../../../notifications/presentation/screens/notification_screen.dart';
 import '../../../offers/presentation/screens/payment_offers_screen.dart';
 import '../../../rides/presentation/screen/ride_history_screen.dart';
 import '../../../wallet/presentation/screens/wallet_screen.dart';
@@ -206,7 +206,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Location Selector Chip Button
+          // --- Left Side: Location Selector Chip Button ---
           InkWell(
             onTap: () async {
               final result = await Navigator.push(
@@ -273,46 +273,81 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
 
-          // Right Notification Bell Badge
-          Stack(
+          // --- Right Side: Notification Bell & Hamburger Menu ---
+          Row(
             children: [
-              InkWell(
-                onTap: () {
-                  Scaffold.of(context).openDrawer();
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
+              // 1. Notification Bell
+              Stack(
+                children: [
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const NotificationScreen()),
+                      );
+                    },
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: const Icon(
-                    Icons.notifications_none_rounded,
-                    color: Color(0xFF0F172A),
-                    size: 20,
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 2,
-                right: 2,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF200F54),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Text(
-                    "3",
-                    style: TextStyle(
-                      fontSize: 8,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: const Icon(
+                        Icons.notifications_none_rounded,
+                        color: Color(0xFF0F172A),
+                        size: 20,
+                      ),
                     ),
                   ),
-                ),
+                  Positioned(
+                    top: 2,
+                    right: 2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF200F54),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Text(
+                        "3",
+                        style: TextStyle(
+                          fontSize: 8,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(width: 8),
+
+              // 2. Hamburger App Drawer Menu
+              Builder(
+                builder: (context) {
+                  return InkWell(
+                    onTap: () {
+                      Scaffold.of(context).openDrawer(); // Opens the sidebar
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: const Icon(
+                        Icons.menu_rounded,
+                        color: Color(0xFF0F172A),
+                        size: 20,
+                      ),
+                    ),
+                  );
+                }
               ),
             ],
           ),

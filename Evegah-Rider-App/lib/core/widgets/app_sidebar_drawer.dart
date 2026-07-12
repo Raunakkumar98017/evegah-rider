@@ -30,11 +30,12 @@ class AppSidebarDrawer extends StatelessWidget {
       backgroundColor: const Color(0xFFFAFBFE),
       child: Column(
         children: [
-          // --- HEADER WITH LOGO & BRANDING ---
+         // --- HEADER WITH LOGO & BRANDING ---
           Container(
             width: double.infinity,
+            // 🚨 FIX: Removed the hardcoded 'height: 170' so it adapts to the large logo without crashing
             padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 20,
+              top: MediaQuery.of(context).padding.top + 10,
               bottom: 20,
               left: 20,
               right: 20,
@@ -47,35 +48,19 @@ class AppSidebarDrawer extends StatelessWidget {
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min, // 🚨 FIX: Tells the purple box to wrap tightly around the content
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start, // Keeps the X button aligned near the top
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Image.asset(
-                            'assets/Evegah_login_page_logo.png',
-                            height: 24,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.bolt, color: Color(0xFF8CE600), size: 24),
-                          ),
-                          const SizedBox(width: 6),
-                          const Text(
-                            "evegah",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                      child: Image.asset(
+                        'assets/logo.png',
+                        height: 80, // Your large logo size
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.bolt, color: Color(0xFF8CE600), size: 48),
                       ),
                     ),
                     IconButton(
@@ -84,22 +69,27 @@ class AppSidebarDrawer extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  "Ride Green, Save More",
-                  style: TextStyle(
-                    color: Color(0xFF8CE600),
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  "Navigation Menu & Quick Page Inspector",
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 10,
-                  ),
+                const SizedBox(height: 12), // Space between your large logo and the text below
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      "Ride Green, Save More",
+                      style: TextStyle(
+                        color: Color(0xFF8CE600),
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      "Navigation Menu & Quick Page Inspector",
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -164,7 +154,6 @@ class AppSidebarDrawer extends StatelessWidget {
                   onTap: () => _navigateTo(context, const VehicleListScreen()),
                 ),
 
-
                 const Divider(height: 24, indent: 12, endIndent: 12),
 
                 // SECTION 2: RIDER SERVICES & ACCOUNT
@@ -225,7 +214,7 @@ class AppSidebarDrawer extends StatelessWidget {
           ),
 
           // --- FOOTER NOTE ---
-          Container(
+          /*Container(
             padding: const EdgeInsets.all(14),
             color: const Color(0xFFF1F5F9),
             child: Row(
@@ -242,7 +231,7 @@ class AppSidebarDrawer extends StatelessWidget {
                 ),
               ],
             ),
-          ),
+          ),*/
         ],
       ),
     );
@@ -263,14 +252,14 @@ class AppSidebarDrawer extends StatelessWidget {
     );
   }
 
- Widget _buildDrawerTile({
+  Widget _buildDrawerTile({
     required BuildContext context,
     required IconData icon,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
-    String? badge,      // Kept in parameters so existing calls don't break,
-    Color? badgeColor,  // but completely ignored in the UI render.
+    String? badge,
+    Color? badgeColor,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
@@ -293,12 +282,12 @@ class AppSidebarDrawer extends StatelessWidget {
         ),
         title: Row(
           children: [
-            // 🚨 EXPANDED TAKES UP THE FULL WIDTH NOW THAT BADGES ARE REMOVED
+            // Expanded allows the text to take up the full row width, preventing overflows
             Expanded(
               child: Text(
                 title,
                 maxLines: 1,
-                overflow: TextOverflow.ellipsis, // Elegantly clips text if the screen is extremely small
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
@@ -318,5 +307,5 @@ class AppSidebarDrawer extends StatelessWidget {
         trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFF94A3B8)),
       ),
     );
-  }}
-  
+  }
+}
