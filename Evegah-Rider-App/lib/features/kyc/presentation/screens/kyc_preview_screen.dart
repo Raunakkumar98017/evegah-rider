@@ -6,571 +6,793 @@ import '../../data/services/kyc_service.dart';
 import '../../data/services/kyc_ocr_service.dart';
 import 'kyc_camera_screen.dart';
 
-class KycPreviewScreen extends StatefulWidget {
+class KycPreviewScreen
+    extends StatefulWidget {
   final KycStep step;
+
   final String imagePath;
+
+  // true  = automatically continue
+  // false = save only this selected step
+  final bool continueToNextStep;
 
   const KycPreviewScreen({
     super.key,
     required this.step,
     required this.imagePath,
+    this.continueToNextStep = true,
   });
 
   @override
-  State<KycPreviewScreen> createState() => _KycPreviewScreenState();
+  State<KycPreviewScreen>
+      createState() =>
+          _KycPreviewScreenState();
 }
 
-class _KycPreviewScreenState extends State<KycPreviewScreen> {
-  final KycService _kycService = KycService();
-  final KycOcrService _ocrService = KycOcrService();
-  bool _isOcrRunning = false;
+class _KycPreviewScreenState
+    extends State<KycPreviewScreen> {
+  // =========================================================
+  // COLORS
+  // =========================================================
 
-  @override
-  void initState() {
-    super.initState();
-    if (widget.step == KycStep.aadhaarFront || widget.step == KycStep.aadhaarBack) {
-      _runOcrExtraction();
+  static const Color brandPurple =
+      Color(0xFF4B16C8);
+
+  static const Color darkPurple =
+      Color(0xFF24105E);
+
+  static const Color successGreen =
+      Color(0xFF12B981);
+
+  static const Color pageBackground =
+      Color(0xFFF8F9FD);
+
+  static const Color darkText =
+      Color(0xFF111827);
+
+  static const Color greyText =
+      Color(0xFF64748B);
+
+  final KycService _kycService =
+      KycService();
+
+  bool _isSaving = false;
+
+  // =========================================================
+  // SCREEN DATA
+  // =========================================================
+
+  String get _screenTitle {
+    switch (widget.step) {
+      case KycStep.selfie:
+        return "Review Live Photo";
+
+      case KycStep.aadhaarFront:
+        return "Review Aadhaar Front";
+
+      case KycStep.aadhaarBack:
+        return "Review Aadhaar Back";
     }
   }
 
-  Future<void> _runOcrExtraction() async {
+  String get _successTitle {
+    switch (widget.step) {
+      case KycStep.selfie:
+        return "Live photo captured";
+
+      case KycStep.aadhaarFront:
+        return "Aadhaar front captured";
+
+      case KycStep.aadhaarBack:
+        return "Aadhaar back captured";
+    }
+  }
+
+  String get _successDescription {
+    switch (widget.step) {
+      case KycStep.selfie:
+        return "Check that your face is clear and properly visible.";
+
+      case KycStep.aadhaarFront:
+        return "Check that all details on the front side are readable.";
+
+      case KycStep.aadhaarBack:
+        return "Check that all details on the back side are readable.";
+    }
+  }
+
+  String get _primaryButtonText {
+    if (!widget.continueToNextStep) {
+      return "Save Photo";
+    }
+
+    if (widget.step ==
+        KycStep.aadhaarBack) {
+      return "Finish Verification";
+    }
+
+    return "Use Photo & Continue";
+  }
+
+  int get _currentStep {
+    switch (widget.step) {
+      case KycStep.selfie:
+        return 1;
+
+      case KycStep.aadhaarFront:
+        return 2;
+
+      case KycStep.aadhaarBack:
+        return 3;
+    }
+  }
+
+  // =========================================================
+  // SAVE AND CONTINUE
+  // =========================================================
+
+  Future<void>
+      _handleContinue() async {
+    if (_isSaving) {
+      return;
+    }
+
     setState(() {
-      _isOcrRunning = true;
+      _isSaving = true;
     });
 
-    try {
-      if (widget.step == KycStep.aadhaarFront) {
-        final details = await _ocrService.extractDetails(widget.imagePath);
-        if (mounted) {
-          setState(() {
-            _kycService.ocrName = details['name'] ?? "";
-            _kycService.ocrAadhaarNumber = details['aadhaarNumber'] ?? "";
-            _kycService.ocrDob = details['dob'] ?? "";
-            _kycService.ocrGender = details['gender'] ?? "";
-            _isOcrRunning = false;
-          });
-          _showOcrDetailsBottomSheet();
-        }
-      } else if (widget.step == KycStep.aadhaarBack) {
-        final details = await _ocrService.extractBackDetails(widget.imagePath);
-        if (mounted) {
-          setState(() {
-            _kycService.ocrAddress = details['address'] ?? "";
-            _kycService.ocrPinCode = details['pinCode'] ?? "";
-            _isOcrRunning = false;
-          });
-          _showOcrBackDetailsBottomSheet();
-        }
-      }
-    } catch (e) {
-      debugPrint("OCR trigger error: $e");
-      if (mounted) {
-        setState(() {
-          _isOcrRunning = false;
-        });
-      }
-    }
-  }
-
-  void _showOcrDetailsBottomSheet() {
-    final TextEditingController nameController = TextEditingController(text: _kycService.ocrName);
-    final TextEditingController numberController = TextEditingController(text: _kycService.ocrAadhaarNumber);
-    final TextEditingController dobController = TextEditingController(text: _kycService.ocrDob);
-    final TextEditingController genderController = TextEditingController(text: _kycService.ocrGender);
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-            left: 24,
-            right: 24,
-            top: 24,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 48,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Row(
-                  children: [
-                    Icon(Icons.document_scanner, color: Color(0xFF4313B8), size: 28),
-                    SizedBox(width: 12),
-                    Text(
-                      "Extracted ID Details",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "We've collected these details using OCR. Please verify or edit them to ensure accuracy.",
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                ),
-                const SizedBox(height: 20),
-
-                // Form Fields
-                _buildTextField(label: "Full Name", controller: nameController, icon: Icons.person_outline),
-                const SizedBox(height: 16),
-                _buildTextField(label: "Aadhaar Card Number", controller: numberController, icon: Icons.badge_outlined),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildTextField(label: "Date of Birth", controller: dobController, icon: Icons.calendar_today_outlined),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildTextField(label: "Gender", controller: genderController, icon: Icons.wc_outlined),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 28),
-
-                // Confirm button
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      _kycService.ocrName = nameController.text;
-                      _kycService.ocrAadhaarNumber = numberController.text;
-                      _kycService.ocrDob = dobController.text;
-                      _kycService.ocrGender = genderController.text;
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4313B8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: const Text(
-                      "Confirm Details",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showOcrBackDetailsBottomSheet() {
-    final TextEditingController addressController = TextEditingController(text: _kycService.ocrAddress);
-    final TextEditingController pinCodeController = TextEditingController(text: _kycService.ocrPinCode);
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-            left: 24,
-            right: 24,
-            top: 24,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 48,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Row(
-                  children: [
-                    Icon(Icons.document_scanner, color: Color(0xFF4313B8), size: 28),
-                    SizedBox(width: 12),
-                    Text(
-                      "Extracted Address Details",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "We've collected these details from the Aadhaar back side. Please verify or edit them to ensure accuracy.",
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                ),
-                const SizedBox(height: 20),
-
-                // Form Fields
-                _buildTextField(label: "Full Address", controller: addressController, icon: Icons.home_outlined, maxLines: 3),
-                const SizedBox(height: 16),
-                _buildTextField(label: "PIN Code", controller: pinCodeController, icon: Icons.pin_drop_outlined),
-                const SizedBox(height: 28),
-
-                // Confirm button
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      _kycService.ocrAddress = addressController.text;
-                      _kycService.ocrPinCode = pinCodeController.text;
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4313B8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: const Text(
-                      "Confirm Details",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTextField({
-    required String label,
-    required TextEditingController controller,
-    required IconData icon,
-    int maxLines = 1,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-        ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          maxLines: maxLines,
-          decoration: InputDecoration(
-            prefixIcon: Icon(icon, color: const Color(0xFF4313B8), size: 20),
-            filled: true,
-            fillColor: Colors.grey.shade50,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade200),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade200),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF4313B8), width: 1.5),
-            ),
-          ),
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-      ],
-    );
-  }
-
-  void _handleContinue() {
     KycStep? nextStep;
 
     switch (widget.step) {
       case KycStep.selfie:
-        nextStep = KycStep.aadhaarFront;
-        _kycService.updateStepStatus("Selfie", "Captured", filePath: widget.imagePath);
+        nextStep =
+            KycStep.aadhaarFront;
+
+        _kycService
+            .updateStepStatus(
+          "Selfie",
+          "Captured",
+          filePath:
+              widget.imagePath,
+        );
+
         break;
+
       case KycStep.aadhaarFront:
-        nextStep = KycStep.aadhaarBack;
-        _kycService.updateStepStatus("Aadhaar Front", "Captured", filePath: widget.imagePath);
+        nextStep =
+            KycStep.aadhaarBack;
+
+        _kycService
+            .updateStepStatus(
+          "Aadhaar Front",
+          "Captured",
+          filePath:
+              widget.imagePath,
+        );
+
         break;
+
       case KycStep.aadhaarBack:
-        nextStep = null; // Done with all captures!
-        _kycService.updateStepStatus("Aadhaar Back", "Captured", filePath: widget.imagePath);
+        nextStep = null;
+
+        _kycService
+            .updateStepStatus(
+          "Aadhaar Back",
+          "Captured",
+          filePath:
+              widget.imagePath,
+        );
+
         break;
     }
 
+    if (!mounted) {
+      return;
+    }
+
+    // =====================================================
+    // INDIVIDUAL STEP MODE
+    // =====================================================
+
+    if (!widget
+        .continueToNextStep) {
+      // Close Preview screen.
+
+      Navigator.pop(context);
+
+      // Close Camera screen.
+
+      Navigator.pop(context);
+
+      return;
+    }
+
+    // =====================================================
+    // COMPLETE GUIDED FLOW
+    // =====================================================
+
     if (nextStep != null) {
-      // Go to next capture screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => KycCameraScreen(step: nextStep!),
+          builder: (context) =>
+              KycCameraScreen(
+            step: nextStep!,
+            continueToNextStep:
+                true,
+          ),
         ),
       );
-    } else {
-      // Completed all steps! Go back to KycScreen (which will now show KYC Submitted state)
-      // Pop all the way back to the root KycScreen
-      Navigator.of(context).popUntil((route) => route.isFirst);
+
+      return;
     }
+
+    // =====================================================
+    // ALL STEPS COMPLETED
+    // =====================================================
+
+    Navigator.of(context)
+        .popUntil(
+      (route) =>
+          route.isFirst,
+    );
   }
 
+  // =========================================================
+  // RETAKE PHOTO
+  // =========================================================
+
+  void _retakePhoto() {
+    Navigator.pop(context);
+  }
+
+  // =========================================================
+  // BUILD
+  // =========================================================
+
   @override
-  Widget build(BuildContext context) {
-    String successTitle = "";
-    String successSubtitle = "";
-    String continueBtnText = "Continue";
-    int currentStep = 1;
-
-    switch (widget.step) {
-      case KycStep.selfie:
-        successTitle = "Photo Captured!";
-        successSubtitle = "Your live photo has been captured successfully.";
-        continueBtnText = "Continue";
-        currentStep = 2; // Active step on stepper is 2 during live photo captured view
-        break;
-      case KycStep.aadhaarFront:
-        successTitle = "Front Captured!";
-        successSubtitle = "Aadhaar front side captured successfully.";
-        continueBtnText = "Continue";
-        currentStep = 2; // Active step is 2
-        break;
-      case KycStep.aadhaarBack:
-        successTitle = "Back Captured!";
-        successSubtitle = "Aadhaar back side captured successfully.";
-        continueBtnText = "Continue";
-        currentStep = 3; // Active step is 3
-        break;
-    }
-
+  Widget build(
+    BuildContext context,
+  ) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.step == KycStep.selfie ? "Live Photo" : (widget.step == KycStep.aadhaarFront ? "Aadhaar Front" : "Aadhaar Back"),
-          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        centerTitle: true,
-      ),
+      backgroundColor:
+          pageBackground,
+
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          children: [
+            // =================================================
+            // HEADER
+            // =================================================
+
+            Padding(
+              padding:
+                  const EdgeInsets
+                      .fromLTRB(
+                18,
+                12,
+                18,
+                6,
+              ),
+
+              child: Row(
+                children: [
+                  _buildBackButton(),
+
+                  Expanded(
+                    child: Text(
+                      _screenTitle,
+
+                      textAlign:
+                          TextAlign
+                              .center,
+
+                      style:
+                          const TextStyle(
+                        color:
+                            darkText,
+
+                        fontSize:
+                            20,
+
+                        fontWeight:
+                            FontWeight
+                                .w800,
+                      ),
+                    ),
+                  ),
+
+                  Container(
+                    padding:
+                        const EdgeInsets
+                            .symmetric(
+                      horizontal:
+                          10,
+
+                      vertical:
+                          6,
+                    ),
+
+                    decoration:
+                        BoxDecoration(
+                      color:
+                          const Color(
+                        0xFFF0EBFF,
+                      ),
+
+                      borderRadius:
+                          BorderRadius
+                              .circular(
+                        20,
+                      ),
+                    ),
+
+                    child: Text(
+                      "$_currentStep of 3",
+
+                      style:
+                          const TextStyle(
+                        color:
+                            brandPurple,
+
+                        fontSize:
+                            10,
+
+                        fontWeight:
+                            FontWeight
+                                .w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // =================================================
+            // CONTENT
+            // =================================================
+
+            Expanded(
+  child: Padding(
+    padding: const EdgeInsets.fromLTRB(
+      20,
+      8,
+      20,
+      14,
+    ),
+    child: Column(
+      children: [
+        // Success badge
+
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 13,
+            vertical: 7,
+          ),
+          decoration: BoxDecoration(
+            color: const Color(
+              0xFFE8FFF7,
+            ),
+            borderRadius: BorderRadius.circular(
+              30,
+            ),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.check_circle_rounded,
+                color: successGreen,
+                size: 17,
+              ),
+
+              SizedBox(
+                width: 6,
+              ),
+
+              Text(
+                "PHOTO CAPTURED",
+                style: TextStyle(
+                  color: Color(
+                    0xFF07875F,
+                  ),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.7,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(
+          height: 8,
+        ),
+
+        // Success title
+
+        Text(
+          _successTitle,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: darkText,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.4,
+          ),
+        ),
+
+        const SizedBox(
+          height: 4,
+        ),
+
+        // Description
+
+        Text(
+          _successDescription,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: greyText,
+            fontSize: 11,
+            height: 1.3,
+          ),
+        ),
+
+        const SizedBox(
+          height: 12,
+        ),
+
+        // Image fills available space
+
+        Expanded(
+          child: Container(
+            width: double.infinity,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: const Color(
+                0xFF0A0F18,
+              ),
+              borderRadius: BorderRadius.circular(
+                25,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(
+                    alpha: 0.10,
+                  ),
+                  blurRadius: 20,
+                  offset: const Offset(
+                    0,
+                    8,
+                  ),
+                ),
+              ],
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.file(
+                  File(
+                    widget.imagePath,
+                  ),
+                  fit: BoxFit.cover,
+                  errorBuilder: (
+                    context,
+                    error,
+                    stackTrace,
+                  ) {
+                    return const Center(
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.white54,
+                        size: 50,
+                      ),
+                    );
+                  },
+                ),
+
+                Positioned(
+                  top: 14,
+                  right: 14,
+                  child: Container(
+                    height: 36,
+                    width: 36,
+                    decoration: BoxDecoration(
+                      color: successGreen,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 3,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(
+          height: 12,
+        ),
+
+        // Verification checks
+
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 11,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(
+              17,
+            ),
+            border: Border.all(
+              color: const Color(
+                0xFFE8EBF2,
+              ),
+            ),
+          ),
           child: Column(
             children: [
-              const SizedBox(height: 12),
-              // Stepper Header
-              KycStepperHeader(activeStep: currentStep),
-              const SizedBox(height: 36),
-
-              // Success Icon & Confetti/Dots simulation
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  Container(
-                    height: 56,
-                    width: 56,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF10B981),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.check, color: Colors.white, size: 32),
-                  ),
-                  // Decorative confetti dots
-                  ..._buildConfettiDecorations(),
-                ],
+              _buildCheckItem(
+                widget.step == KycStep.selfie
+                    ? "Face is clearly visible"
+                    : "Document is clearly visible",
               ),
-              const SizedBox(height: 18),
 
-              // Status messages
-              Text(
-                successTitle,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
+              const SizedBox(
+                height: 8,
               ),
-              const SizedBox(height: 4),
-              Text(
-                successSubtitle,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 28),
 
-              // Rounded Preview Image Container
-              Expanded(
-                child: Center(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        )
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: kIsWeb
-                        ? Image.network(
-                            widget.imagePath,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                const Icon(Icons.broken_image, size: 80),
-                          )
-                        : (widget.imagePath.startsWith('/') ||
-                                widget.imagePath.contains(':') ||
-                                widget.imagePath.startsWith('file://'))
-                            ? Image.file(
-                                File(widget.imagePath),
-                                fit: BoxFit.cover,
-                              )
-                            : const Icon(Icons.broken_image, size: 80),
-                  ),
-                ),
+              _buildCheckItem(
+                widget.step == KycStep.selfie
+                    ? "Photo has sufficient lighting"
+                    : "Document details are readable",
               ),
-              const SizedBox(height: 28),
-
-              // Loading OCR overlay if running
-              if (_isOcrRunning)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4313B8)),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        "Scanning details with OCR...",
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
-                      ),
-                    ],
-                  ),
-                ),
-
-              // Buttons
-              Column(
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context), // Go back to retake
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF4313B8),
-                        side: const BorderSide(color: Color(0xFF4313B8), width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: Text(
-                        widget.step == KycStep.selfie ? "Retake Photo" : "Retake",
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _isOcrRunning
-                          ? null
-                          : () {
-                              if (widget.step == KycStep.aadhaarFront && _kycService.ocrName.isEmpty) {
-                                _showOcrDetailsBottomSheet();
-                              } else if (widget.step == KycStep.aadhaarBack && _kycService.ocrAddress.isEmpty) {
-                                _showOcrBackDetailsBottomSheet();
-                              } else {
-                                _handleContinue();
-                              }
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4313B8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        continueBtnText,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
             ],
+          ),
+        ),
+
+        const SizedBox(
+          height: 12,
+        ),
+
+        // Action buttons
+
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _isSaving
+                    ? null
+                    : _retakePhoto,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(
+                    0,
+                    54,
+                  ),
+                  foregroundColor: brandPurple,
+                  side: const BorderSide(
+                    color: brandPurple,
+                    width: 1.5,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      16,
+                    ),
+                  ),
+                ),
+                child: const Text(
+                  "Retake",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(
+              width: 10,
+            ),
+
+            Expanded(
+              flex: 2,
+              child: ElevatedButton(
+                onPressed: _isSaving
+                    ? null
+                    : _handleContinue,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(
+                    0,
+                    54,
+                  ),
+                  elevation: 0,
+                  backgroundColor: brandPurple,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor:
+                      brandPurple.withValues(
+                    alpha: 0.65,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      16,
+                    ),
+                  ),
+                ),
+                child: _isSaving
+                    ? const SizedBox(
+                        height: 21,
+                        width: 21,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : Row(
+                        mainAxisAlignment:
+                            MainAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              _primaryButtonText,
+                              maxLines: 1,
+                              overflow:
+                                  TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight:
+                                    FontWeight.w800,
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(
+                            width: 6,
+                          ),
+
+                          const Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 17,
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  ),
+),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // BACK BUTTON
+  // =========================================================
+
+  Widget _buildBackButton() {
+    return Material(
+      color: Colors.white,
+
+      shape:
+          const CircleBorder(),
+
+      child: InkWell(
+        onTap: () {
+          Navigator.pop(context);
+        },
+
+        customBorder:
+            const CircleBorder(),
+
+        child: Container(
+          height: 42,
+          width: 42,
+
+          decoration:
+              BoxDecoration(
+            shape:
+                BoxShape.circle,
+
+            border:
+                Border.all(
+              color:
+                  const Color(
+                0xFFE6E9F0,
+              ),
+            ),
+          ),
+
+          child:
+              const Icon(
+            Icons
+                .arrow_back_rounded,
+
+            color:
+                darkText,
+
+            size:
+                21,
           ),
         ),
       ),
     );
   }
 
-  // Helper to generate some colorful dots around the green check circle
-  List<Widget> _buildConfettiDecorations() {
-    final List<Color> colors = [Colors.purple, Colors.blue, Colors.orange, Colors.red, Colors.green];
-    return List.generate(8, (index) {
-      double angle = (index * 45) * 3.14159 / 180;
-      double radius = 42.0;
-      return Transform.translate(
-        offset: Offset(radius * math.cos(angle), radius * math.sin(angle)),
-        child: Container(
-          width: 5,
-          height: 5,
-          decoration: BoxDecoration(
-            color: colors[index % colors.length],
-            shape: BoxShape.circle,
+  // =========================================================
+  // CHECK ITEM
+  // =========================================================
+
+  Widget _buildCheckItem(
+    String text,
+  ) {
+    return Row(
+      children: [
+        Container(
+          height: 28,
+          width: 28,
+
+          decoration:
+              const BoxDecoration(
+            color:
+                Color(
+              0xFFE8FFF7,
+            ),
+
+            shape:
+                BoxShape.circle,
+          ),
+
+          child:
+              const Icon(
+            Icons
+                .check_rounded,
+
+            color:
+                successGreen,
+
+            size:
+                17,
           ),
         ),
-      );
-    });
+
+        const SizedBox(
+          width: 11,
+        ),
+
+        Expanded(
+          child: Text(
+            text,
+
+            style:
+                const TextStyle(
+              color:
+                  darkText,
+
+              fontSize:
+                  12,
+
+              fontWeight:
+                  FontWeight
+                      .w600,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
