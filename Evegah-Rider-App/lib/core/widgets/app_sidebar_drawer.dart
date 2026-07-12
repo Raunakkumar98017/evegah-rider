@@ -16,13 +16,20 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 class AppSidebarDrawer extends StatelessWidget {
   const AppSidebarDrawer({super.key});
 
-  void _navigateTo(BuildContext context, Widget screen) {
-    Navigator.pop(context); // Close Drawer
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => screen),
-    );
-  }
+ void _navigateTo(BuildContext context, Widget screen) {
+  // 1. Close the drawer
+  Navigator.pop(context);
+
+  // 2. Clear the entire navigation stack and push the new screen as the new "home"
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(
+      builder: (context) => screen,
+      settings: RouteSettings(name: screen.runtimeType.toString()),
+    ),
+    (route) => false, // This wipes the history clean
+  );
+}
 
   @override
   Widget build(BuildContext context) {
