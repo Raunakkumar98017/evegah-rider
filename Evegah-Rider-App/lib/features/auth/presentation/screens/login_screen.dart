@@ -527,17 +527,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       const SizedBox(height: 24),
 
                       // 6. Legal Disclaimer Footer (#2a195c Links)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.lock_outline_rounded, size: 12, color: Color(0xFF94A3B8)),
-                          SizedBox(width: 4),
-                          Text("By continuing, you agree to our ", style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
-                          Text("Terms & Conditions", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2a195c))),
-                          Text(" and ", style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
-                          Text("Privacy Policy", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2a195c))),
-                        ],
-                      ),
+                     // 🚨 FIX: Using Wrap instead of Row to allow text to automatically go to the next line
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: const [
+                        Icon(Icons.lock_outline_rounded, size: 12, color: Color(0xFF94A3B8)),
+                        SizedBox(width: 4),
+                        Text("By continuing, you agree to our ", style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                        Text("Terms & Conditions", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2a195c))),
+                        Text(" and ", style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                        Text("Privacy Policy", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2a195c))),
+                      ],
+                    ),
                     ],
                   ),
                 ),
