@@ -265,7 +265,7 @@ class _WalletScreenState extends State<WalletScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --- 1. TOP HEADER (Hamburger Menu, Logo, Bell, Profile) ---
+              /*// --- 1. TOP HEADER (Hamburger Menu, Logo, Bell, Profile) ---
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Row(
@@ -311,9 +311,51 @@ class _WalletScreenState extends State<WalletScreen> {
                 ),
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 12),*/
+              // =================================================
+// WALLET HEADER
+// =================================================
 
-              // --- 2. TITLE & SUBTITLE ---
+Padding(
+  padding: const EdgeInsets.fromLTRB(
+    20,
+    20,
+    20,
+    18,
+  ),
+
+  child: const Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+
+    children: [
+
+      Text(
+        "Wallet",
+        style: TextStyle(
+          color: Color(0xFF0F172A),
+          fontSize: 26,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.5,
+        ),
+      ),
+
+      SizedBox(height: 4),
+
+      Text(
+        "Manage your balance and payments",
+        style: TextStyle(
+          color: Color(0xFF94A3B8),
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    ],
+  ),
+),
+
+const SizedBox(height: 4),
+
+            /*  // --- 2. TITLE & SUBTITLE ---
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
@@ -332,7 +374,7 @@ class _WalletScreenState extends State<WalletScreen> {
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 20),*/
 
               // --- 3. PURPLE BALANCE CARD WITH 3D WALLET ---
               Padding(

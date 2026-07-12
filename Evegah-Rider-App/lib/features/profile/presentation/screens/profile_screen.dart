@@ -46,52 +46,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // --- 1. TOP HEADER (Logo, Bell, Profile) ---
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // spacer to align center
-                    const SizedBox(width: 48),
-                    // evegah logo
-                    const Text(
-                      "evegah",
-                      style: TextStyle(
-                        color: Color(0xFF4313B8),
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    // Bell & Profile
-                    Row(
-                      children: [
-                        Stack(
-                          children: [
-                            const Icon(Icons.notifications_none_rounded, color: Colors.black, size: 24),
-                            Positioned(
-                              top: 2,
-                              right: 2,
-                              child: Container(
-                                width: 7,
-                                height: 7,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFD2FC00),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 14),
-                        const Icon(Icons.account_circle_outlined, color: Colors.black, size: 24),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+             // =================================================
+// =================================================
+// PROFILE HEADER
+// =================================================
 
-              const SizedBox(height: 12),
+Padding(
+  padding: const EdgeInsets.fromLTRB(
+    20,
+    20,
+    20,
+    18,
+  ),
+
+  child: const Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+
+    children: [
+
+      Text(
+        "Profile",
+        style: TextStyle(
+          color: Color(0xFF0F172A),
+          fontSize: 26,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.5,
+        ),
+      ),
+
+      SizedBox(height: 4),
+
+      Text(
+        "Manage your account and preferences",
+        style: TextStyle(
+          color: Color(0xFF94A3B8),
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    ],
+  ),
+),
+
+const SizedBox(height: 4),
 
               // --- 2. USER DETAILS CARD WITH STATS ---
               Padding(
