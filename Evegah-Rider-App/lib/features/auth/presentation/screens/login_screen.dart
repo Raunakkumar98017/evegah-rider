@@ -386,22 +386,28 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             ),
                             const SizedBox(width: 12),
                             // Mobile Number Input Field
-                            Expanded(
-                              child: TextField(
-                                controller: phoneController,
-                                keyboardType: TextInputType.phone,
-                                maxLength: 10,
-                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A), letterSpacing: 0.5),
-                                decoration: const InputDecoration(
-                                  hintText: "Enter mobile number",
-                                  hintStyle: TextStyle(fontSize: 13, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500, letterSpacing: 0),
-                                  border: InputBorder.none,
-                                  counterText: "",
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                ),
+                            // Mobile Number Input Field
+                          Expanded(
+                            child: TextField(
+                              controller: phoneController,
+                              keyboardType: TextInputType.phone,
+                              maxLength: 10,
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A), letterSpacing: 0.5),
+                              decoration: const InputDecoration(
+                                hintText: "Enter mobile number",
+                                hintStyle: TextStyle(fontSize: 13, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500, letterSpacing: 0),
+                                // 🚨 FIX: Explicitly disable ALL border types to remove any interior box/underline
+                                border: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                errorBorder: InputBorder.none,
+                                disabledBorder: InputBorder.none,
+                                counterText: "",
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
                               ),
                             ),
+                          ),
                             const SizedBox(width: 14),
                           ],
                         ),
@@ -527,17 +533,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       const SizedBox(height: 24),
 
                       // 6. Legal Disclaimer Footer (#2a195c Links)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.lock_outline_rounded, size: 12, color: Color(0xFF94A3B8)),
-                          SizedBox(width: 4),
-                          Text("By continuing, you agree to our ", style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
-                          Text("Terms & Conditions", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2a195c))),
-                          Text(" and ", style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
-                          Text("Privacy Policy", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2a195c))),
-                        ],
-                      ),
+                     // 🚨 FIX: Using Wrap instead of Row to allow text to automatically go to the next line
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: const [
+                        Icon(Icons.lock_outline_rounded, size: 12, color: Color(0xFF94A3B8)),
+                        SizedBox(width: 4),
+                        Text("By continuing, you agree to our ", style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                        Text("Terms & Conditions", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2a195c))),
+                        Text(" and ", style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                        Text("Privacy Policy", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2a195c))),
+                      ],
+                    ),
                     ],
                   ),
                 ),

@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+
 import '../../data/services/kyc_service.dart';
 import '../../../../features/profile/data/services/profile_service.dart';
 import 'kyc_camera_screen.dart';
@@ -12,262 +14,1156 @@ class KycScreen extends StatefulWidget {
 }
 
 class _KycScreenState extends State<KycScreen> {
+  // =========================================================
+  // SERVICES
+  // =========================================================
+
   final KycService _kycService = KycService();
   final ProfileService _profileService = ProfileService();
+
+  // =========================================================
+  // EVEGAH BRAND COLORS
+  // =========================================================
+
+  static const Color brandPurple = Color(0xFF24105E);
+  static const Color brightPurple = Color(0xFF4313B8);
+  static const Color limeGreen = Color(0xFFBFFF00);
+
+  static const Color pageBackground = Color(0xFFF8F9FD);
+  static const Color darkText = Color(0xFF111827);
+  static const Color greyText = Color(0xFF8A93A5);
+  static const Color lightBorder = Color(0xFFE6E9F0);
+
+  // =========================================================
+  // INITIALIZE KYC STATUS
+  // =========================================================
 
   @override
   void initState() {
     super.initState();
-    // Sync state from profile service if needed
+
+    // Synchronize the KYC status with ProfileService.
+
     if (_profileService.kycStatus == "Approved") {
       _kycService.simulateVerificationApproval();
     } else if (_profileService.kycStatus == "Under Review") {
-      _kycService.updateStepStatus("Selfie", "Captured");
-      _kycService.updateStepStatus("Aadhaar Front", "Captured");
-      _kycService.updateStepStatus("Aadhaar Back", "Captured");
+      _kycService.updateStepStatus(
+        "Selfie",
+        "Captured",
+      );
+
+      _kycService.updateStepStatus(
+        "Aadhaar Front",
+        "Captured",
+      );
+
+      _kycService.updateStepStatus(
+        "Aadhaar Back",
+        "Captured",
+      );
     }
   }
+
+  // =========================================================
+  // START OR CONTINUE THE COMPLETE GUIDED KYC FLOW
+  // =========================================================
 
   void _triggerStartKyc() {
-    // Check which step is next
-    KycStep nextStep = KycStep.selfie;
-    if (_kycService.livePhotoStatus == "Captured" || _kycService.livePhotoStatus == "Verified") {
-      if (_kycService.aadhaarFrontStatus == "Captured" || _kycService.aadhaarFrontStatus == "Verified") {
-        nextStep = KycStep.aadhaarBack;
-      } else {
-        nextStep = KycStep.aadhaarFront;
-      }
+    final bool selfieCompleted =
+        _kycService.isStepCompleted("Selfie");
+
+    final bool frontCompleted =
+        _kycService.isStepCompleted("Aadhaar Front");
+
+    final bool backCompleted =
+        _kycService.isStepCompleted("Aadhaar Back");
+
+    KycStep? nextStep;
+
+    if (!selfieCompleted) {
+      nextStep = KycStep.selfie;
+    } else if (!frontCompleted) {
+      nextStep = KycStep.aadhaarFront;
+    } else if (!backCompleted) {
+      nextStep = KycStep.aadhaarBack;
     }
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => KycCameraScreen(step: nextStep),
-      ),
-    ).then((_) {
-      // Rebuild when returning to update checkboxes
-      setState(() {});
-    });
+    if (nextStep == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("All KYC verification steps are completed."),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    _openKycCamera(
+      step: nextStep,
+      continueToNextStep: true,
+    );
   }
+
+  // =========================================================
+  // OPEN ONLY THE SELECTED KYC STEP
+  // =========================================================
 
   void _triggerSpecificStep(KycStep step) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => KycCameraScreen(step: step),
-      ),
-    ).then((_) {
-      setState(() {});
-    });
+    final bool selfieCompleted =
+        _kycService.isStepCompleted("Selfie");
+
+    final bool frontCompleted =
+        _kycService.isStepCompleted("Aadhaar Front");
+
+    if (step == KycStep.selfie) {
+      _openKycCamera(
+        step: step,
+        continueToNextStep: false,
+      );
+      return;
+    }
+
+    if (step == KycStep.aadhaarFront) {
+      if (!selfieCompleted) {
+        _showLockedStepMessage(
+          "Complete Live Photo first to unlock Aadhaar Front.",
+        );
+        return;
+      }
+
+      _openKycCamera(
+        step: step,
+        continueToNextStep: false,
+      );
+      return;
+    }
+
+    if (!selfieCompleted) {
+      _showLockedStepMessage(
+        "Complete Live Photo first to unlock Aadhaar Back.",
+      );
+      return;
+    }
+
+    if (!frontCompleted) {
+      _showLockedStepMessage(
+        "Complete Aadhaar Front first to unlock Aadhaar Back.",
+      );
+      return;
+    }
+
+    _openKycCamera(
+      step: step,
+      continueToNextStep: false,
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final status = _kycService.kycStatus;
+  // =========================================================
+  // OPEN KYC CAMERA
+  // =========================================================
 
-    if (status == "Verified") {
-      _profileService.kycStatus = "Approved"; // Sync global status
-      return _buildVerifiedView();
-    } else if (status == "Under Review") {
-      _profileService.kycStatus = "Under Review"; // Sync global status
-      return _buildSubmittedView();
-    } else {
-      return _buildWelcomeView();
+  Future<void> _openKycCamera({
+    required KycStep step,
+    required bool continueToNextStep,
+  }) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => KycCameraScreen(
+          step: step,
+          continueToNextStep: continueToNextStep,
+        ),
+      ),
+    );
+
+    if (mounted) {
+      setState(() {});
     }
   }
 
-  // --- VIEW 1: KYC Welcome/Start Screen ---
+  // =========================================================
+  // LOCKED-STEP MESSAGE
+  // =========================================================
+
+  void _showLockedStepMessage(String message) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: brandPurple,
+        margin: const EdgeInsets.all(18),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        content: Row(
+          children: [
+            const Icon(
+              Icons.lock_outline_rounded,
+              color: Colors.white,
+              size: 21,
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // SELECT SCREEN ACCORDING TO KYC STATUS
+  // =========================================================
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    final String status = _kycService.kycStatus;
+
+    if (status == "Verified") {
+      _profileService.kycStatus = "Approved";
+
+      return _buildVerifiedView();
+    }
+
+    if (status == "Under Review") {
+      _profileService.kycStatus = "Under Review";
+
+      return _buildSubmittedView();
+    }
+
+    return _buildWelcomeView();
+  }
+
+  // =========================================================
+  // KYC WELCOME SCREEN
+  // =========================================================
+
   Widget _buildWelcomeView() {
-    final bool isSelfieDone = _kycService.isStepCompleted("Selfie");
-    final bool isFrontDone = _kycService.isStepCompleted("Aadhaar Front");
-    final bool isBackDone = _kycService.isStepCompleted("Aadhaar Back");
+    final bool isSelfieDone =
+        _kycService.isStepCompleted(
+      "Selfie",
+    );
+
+    final bool isFrontDone =
+        _kycService.isStepCompleted(
+      "Aadhaar Front",
+    );
+
+    final bool isBackDone =
+        _kycService.isStepCompleted(
+      "Aadhaar Back",
+    );
+
+    final bool isFrontLocked =
+        !isSelfieDone;
+
+    final bool isBackLocked =
+        !isSelfieDone || !isFrontDone;
+
+    final int completedSteps = [
+      isSelfieDone,
+      isFrontDone,
+      isBackDone,
+    ].where((step) => step).length;
+
+    final double progress =
+        completedSteps / 3;
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text("KYC Verification", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
-        centerTitle: true,
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            children: [
-              const Spacer(flex: 1),
+      backgroundColor: pageBackground,
 
-              // Shield user badge center graphic
-              Stack(
-                alignment: Alignment.center,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // =================================================
+            // TOP HEADER
+            // =================================================
+
+            Padding(
+              padding:
+                  const EdgeInsets.fromLTRB(
+                20,
+                12,
+                20,
+                12,
+              ),
+
+              child: Row(
                 children: [
-                  // Shadow ring
-                  Container(
-                    height: 120,
-                    width: 120,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEEF2FF),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF4313B8).withOpacity(0.06),
-                          blurRadius: 24,
-                          spreadRadius: 4,
-                        )
+                  // Back button
+
+                  Material(
+                    color: Colors.transparent,
+
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.pop(
+                          context,
+                        );
+                      },
+
+                      borderRadius:
+                          BorderRadius.circular(
+                        14,
+                      ),
+
+                      child: Container(
+                        height: 44,
+                        width: 44,
+
+                        decoration:
+                            BoxDecoration(
+                          color: Colors.white,
+
+                          borderRadius:
+                              BorderRadius.circular(
+                            14,
+                          ),
+
+                          border: Border.all(
+                            color: lightBorder,
+                          ),
+                        ),
+
+                        child: const Icon(
+                          Icons
+                              .arrow_back_ios_new_rounded,
+
+                          color: darkText,
+
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const Expanded(
+                    child: Text(
+                      "KYC Verification",
+
+                      textAlign:
+                          TextAlign.center,
+
+                      style: TextStyle(
+                        color: darkText,
+
+                        fontSize: 20,
+
+                        fontWeight:
+                            FontWeight.w800,
+
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                  ),
+
+                  // Empty space keeps title centred.
+
+                  const SizedBox(
+                    height: 44,
+                    width: 44,
+                  ),
+                ],
+              ),
+            ),
+
+            // =================================================
+            // PAGE CONTENT
+            // =================================================
+
+            Expanded(
+              child:
+                  SingleChildScrollView(
+                physics:
+                    const BouncingScrollPhysics(),
+
+                padding:
+                    const EdgeInsets.fromLTRB(
+                  20,
+                  12,
+                  20,
+                  28,
+                ),
+
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+
+                  children: [
+                    // =========================================
+                    // MAIN KYC CARD
+                    // =========================================
+
+                    Container(
+                      width: double.infinity,
+
+                      padding:
+                          const EdgeInsets.all(
+                        22,
+                      ),
+
+                      decoration:
+                          BoxDecoration(
+                        gradient:
+                            const LinearGradient(
+                          begin:
+                              Alignment.topLeft,
+
+                          end:
+                              Alignment.bottomRight,
+
+                          colors: [
+                            brandPurple,
+                            brightPurple,
+                          ],
+                        ),
+
+                        borderRadius:
+                            BorderRadius.circular(
+                          28,
+                        ),
+
+                        boxShadow: [
+                          BoxShadow(
+                            color: brightPurple
+                                .withValues(
+                              alpha: 0.18,
+                            ),
+
+                            blurRadius: 28,
+
+                            offset:
+                                const Offset(
+                              0,
+                              12,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment
+                                .start,
+
+                        children: [
+                          // Icon and progress status
+
+                          Row(
+                            children: [
+                              Container(
+                                height: 62,
+                                width: 62,
+
+                                decoration:
+                                    BoxDecoration(
+                                  color: Colors
+                                      .white
+                                      .withValues(
+                                    alpha: 0.12,
+                                  ),
+
+                                  borderRadius:
+                                      BorderRadius
+                                          .circular(
+                                    20,
+                                  ),
+
+                                  border:
+                                      Border.all(
+                                    color: Colors
+                                        .white
+                                        .withValues(
+                                      alpha: 0.14,
+                                    ),
+                                  ),
+                                ),
+
+                                child:
+                                    const Icon(
+                                  Icons
+                                      .verified_user_outlined,
+
+                                  color:
+                                      limeGreen,
+
+                                  size: 35,
+                                ),
+                              ),
+
+                              const Spacer(),
+
+                              Container(
+                                padding:
+                                    const EdgeInsets
+                                        .symmetric(
+                                  horizontal: 12,
+                                  vertical: 7,
+                                ),
+
+                                decoration:
+                                    BoxDecoration(
+                                  color: Colors
+                                      .white
+                                      .withValues(
+                                    alpha: 0.12,
+                                  ),
+
+                                  borderRadius:
+                                      BorderRadius
+                                          .circular(
+                                    30,
+                                  ),
+                                ),
+
+                                child: Text(
+                                  "$completedSteps of 3 completed",
+
+                                  style:
+                                      const TextStyle(
+                                    color:
+                                        Colors.white,
+
+                                    fontSize: 10,
+
+                                    fontWeight:
+                                        FontWeight
+                                            .w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(
+                            height: 24,
+                          ),
+
+                          const Text(
+                            "Verify your identity",
+
+                            style: TextStyle(
+                              color:
+                                  Colors.white,
+
+                              fontSize: 25,
+
+                              fontWeight:
+                                  FontWeight.w800,
+
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+
+                          const SizedBox(
+                            height: 7,
+                          ),
+
+                          Text(
+                            "Complete these simple steps to unlock all Evegah rides and features.",
+
+                            style: TextStyle(
+                              color: Colors.white
+                                  .withValues(
+                                alpha: 0.70,
+                              ),
+
+                              fontSize: 12,
+
+                              height: 1.5,
+                            ),
+                          ),
+
+                          const SizedBox(
+                            height: 22,
+                          ),
+
+                          // Progress title
+
+                          Row(
+                            children: [
+                              const Text(
+                                "KYC progress",
+
+                                style:
+                                    TextStyle(
+                                  color:
+                                      Colors.white,
+
+                                  fontSize: 11,
+
+                                  fontWeight:
+                                      FontWeight
+                                          .w700,
+                                ),
+                              ),
+
+                              const Spacer(),
+
+                              Text(
+                                "${(progress * 100).round()}%",
+
+                                style:
+                                    const TextStyle(
+                                  color:
+                                      limeGreen,
+
+                                  fontSize: 11,
+
+                                  fontWeight:
+                                      FontWeight
+                                          .w800,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(
+                            height: 9,
+                          ),
+
+                          // Progress bar
+
+                          ClipRRect(
+                            borderRadius:
+                                BorderRadius.circular(
+                              20,
+                            ),
+
+                            child:
+                                LinearProgressIndicator(
+                              value: progress,
+
+                              minHeight: 7,
+
+                              backgroundColor:
+                                  Colors.white
+                                      .withValues(
+                                alpha: 0.16,
+                              ),
+
+                              valueColor:
+                                  const AlwaysStoppedAnimation<
+                                      Color>(
+                                limeGreen,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 29,
+                    ),
+
+                    // =========================================
+                    // VERIFICATION SECTION
+                    // =========================================
+
+                    const Text(
+                      "Complete these steps",
+
+                      style: TextStyle(
+                        color: darkText,
+
+                        fontSize: 19,
+
+                        fontWeight:
+                            FontWeight.w800,
+
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 5,
+                    ),
+
+                    const Text(
+                      "Make sure all photos are clear and readable.",
+
+                      style: TextStyle(
+                        color: greyText,
+
+                        fontSize: 11,
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 17,
+                    ),
+
+                    // =========================================
+                    // LIVE PHOTO
+                    // =========================================
+
+                    _buildKycStepCard(
+                      number: "1",
+
+                      title: "Live Photo",
+
+                      subtitle:
+                          "Take a clear photo of your face",
+
+                      icon:
+                          Icons.camera_alt_rounded,
+
+                      isCompleted:
+                          isSelfieDone,
+
+                      isLocked:
+                          false,
+
+                      onTap: () {
+                        _triggerSpecificStep(
+                          KycStep.selfie,
+                        );
+                      },
+                    ),
+
+                    const SizedBox(
+                      height: 12,
+                    ),
+
+                    // =========================================
+                    // AADHAAR FRONT
+                    // =========================================
+
+                    _buildKycStepCard(
+                      number: "2",
+
+                      title: "Aadhaar Front",
+
+                      subtitle:
+                          isFrontLocked
+                              ? "Complete Live Photo to unlock"
+                              : "Capture the front side clearly",
+
+                      icon:
+                          Icons.badge_outlined,
+
+                      isCompleted:
+                          isFrontDone,
+
+                      isLocked:
+                          isFrontLocked,
+
+                      onTap: () {
+                        _triggerSpecificStep(
+                          KycStep
+                              .aadhaarFront,
+                        );
+                      },
+                    ),
+
+                    const SizedBox(
+                      height: 12,
+                    ),
+
+                    // =========================================
+                    // AADHAAR BACK
+                    // =========================================
+
+                    _buildKycStepCard(
+                      number: "3",
+
+                      title: "Aadhaar Back",
+
+                      subtitle:
+                          isBackLocked
+                              ? "Complete Aadhaar Front to unlock"
+                              : "Capture the back side clearly",
+
+                      icon:
+                          Icons.contact_mail_outlined,
+
+                      isCompleted:
+                          isBackDone,
+
+                      isLocked:
+                          isBackLocked,
+
+                      onTap: () {
+                        _triggerSpecificStep(
+                          KycStep
+                              .aadhaarBack,
+                        );
+                      },
+                    ),
+
+                    const SizedBox(
+                      height: 20,
+                    ),
+
+                    // =========================================
+                    // SECURITY CARD
+                    // =========================================
+
+                    Container(
+                      width: double.infinity,
+
+                      padding:
+                          const EdgeInsets.all(
+                        15,
+                      ),
+
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            const Color(
+                          0xFFF0FDF4,
+                        ),
+
+                        borderRadius:
+                            BorderRadius.circular(
+                          17,
+                        ),
+
+                        border: Border.all(
+                          color:
+                              const Color(
+                            0xFFDCFCE7,
+                          ),
+                        ),
+                      ),
+
+                      child:
+                          const Row(
+                        children: [
+                          Icon(
+                            Icons
+                                .lock_outline_rounded,
+
+                            color:
+                                Color(
+                              0xFF16A34A,
+                            ),
+
+                            size: 22,
+                          ),
+
+                          SizedBox(
+                            width: 12,
+                          ),
+
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment
+                                      .start,
+
+                              children: [
+                                Text(
+                                  "Your data is protected",
+
+                                  style:
+                                      TextStyle(
+                                    color:
+                                        Color(
+                                      0xFF166534,
+                                    ),
+
+                                    fontSize: 12,
+
+                                    fontWeight:
+                                        FontWeight
+                                            .w700,
+                                  ),
+                                ),
+
+                                SizedBox(
+                                  height: 3,
+                                ),
+
+                                Text(
+                                  "Your information is encrypted and securely stored.",
+
+                                  style:
+                                      TextStyle(
+                                    color:
+                                        Color(
+                                      0xFF568164,
+                                    ),
+
+                                    fontSize: 9,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 21,
+                    ),
+
+                    // =========================================
+                    // START OR CONTINUE BUTTON
+                    // =========================================
+
+                    SizedBox(
+                      height: 57,
+
+                      width:
+                          double.infinity,
+
+                      child:
+                          ElevatedButton(
+                        onPressed:
+                            _triggerStartKyc,
+
+                        style:
+                            ElevatedButton
+                                .styleFrom(
+                          elevation: 0,
+
+                          backgroundColor:
+                              brightPurple,
+
+                          foregroundColor:
+                              Colors.white,
+
+                          shape:
+                              RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius
+                                    .circular(
+                              18,
+                            ),
+                          ),
+                        ),
+
+                        child: Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment
+                                  .center,
+
+                          children: [
+                            Text(
+                              completedSteps ==
+                                      0
+                                  ? "Start KYC Verification"
+                                  : "Continue Verification",
+
+                              style:
+                                  const TextStyle(
+                                fontSize: 15,
+
+                                fontWeight:
+                                    FontWeight
+                                        .w800,
+                              ),
+                            ),
+
+                            const SizedBox(
+                              width: 9,
+                            ),
+
+                            const Icon(
+                              Icons
+                                  .arrow_forward_rounded,
+
+                              size: 21,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 12,
+                    ),
+
+                    const Center(
+                      child: Text(
+                        "It usually takes less than 2 minutes",
+
+                        style: TextStyle(
+                          color: greyText,
+
+                          fontSize: 10,
+
+                          fontWeight:
+                              FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // KYC VERIFICATION STEP CARD
+  // =========================================================
+
+  Widget _buildKycStepCard({
+    required String number,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool isCompleted,
+    required bool isLocked,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isCompleted
+                  ? const Color(0xFFBBF7D0)
+                  : isLocked
+                      ? const Color(0xFFE5E7EB)
+                      : lightBorder,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.025),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                height: 55,
+                width: 55,
+                decoration: BoxDecoration(
+                  color: isCompleted
+                      ? const Color(0xFFF0FDF4)
+                      : isLocked
+                          ? const Color(0xFFF3F4F6)
+                          : const Color(0xFFF2EEFF),
+                  borderRadius: BorderRadius.circular(17),
+                ),
+                child: Icon(
+                  isCompleted
+                      ? Icons.check_rounded
+                      : isLocked
+                          ? Icons.lock_outline_rounded
+                          : icon,
+                  color: isCompleted
+                      ? const Color(0xFF16A34A)
+                      : isLocked
+                          ? const Color(0xFF9CA3AF)
+                          : brightPurple,
+                  size: 25,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          "STEP $number",
+                          style: TextStyle(
+                            color: isLocked
+                                ? const Color(0xFF9CA3AF)
+                                : brightPurple,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.7,
+                          ),
+                        ),
+                        if (isCompleted) ...[
+                          const SizedBox(width: 7),
+                          _buildStepBadge(
+                            text: "DONE",
+                            backgroundColor: const Color(0xFFDCFCE7),
+                            textColor: const Color(0xFF15803D),
+                          ),
+                        ] else if (isLocked) ...[
+                          const SizedBox(width: 7),
+                          _buildStepBadge(
+                            text: "LOCKED",
+                            backgroundColor: const Color(0xFFF3F4F6),
+                            textColor: const Color(0xFF6B7280),
+                          ),
+                        ],
                       ],
                     ),
-                  ),
-                  // Shield Icon
-                  Container(
-                    height: 100,
-                    width: 100,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFEEF2FF),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.shield_outlined,
-                      color: Color(0xFF4313B8),
-                      size: 64,
-                    ),
-                  ),
-                  // Inner user badge icon
-                  const Positioned(
-                    top: 38,
-                    child: Icon(
-                      Icons.person,
-                      color: Color(0xFF4313B8),
-                      size: 28,
-                    ),
-                  ),
-                  // Small check badge overlay
-                  Positioned(
-                    bottom: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF4313B8),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.check, color: Colors.white, size: 10),
+                    const SizedBox(height: 4),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: isLocked
+                            ? const Color(0xFF6B7280)
+                            : darkText,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 32),
-
-              const Text(
-                "Complete your KYC",
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
+                    const SizedBox(height: 3),
+                    Text(
+                      isCompleted ? "Successfully captured" : subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isLocked
+                            ? const Color(0xFF9CA3AF)
+                            : greyText,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              const Text(
-                "To unlock all features and start your ride journey",
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
-                textAlign: TextAlign.center,
-              ),
-
-              const Spacer(flex: 1),
-
-              // Steps List Card
+              const SizedBox(width: 7),
               Container(
+                height: 36,
+                width: 36,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.grey.shade100, width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    )
-                  ],
+                  color: isCompleted
+                      ? const Color(0xFFF0FDF4)
+                      : isLocked
+                          ? const Color(0xFFF3F4F6)
+                          : const Color(0xFFF6F3FF),
+                  shape: BoxShape.circle,
                 ),
-                child: Column(
-                  children: [
-                    _buildStepRow(
-                      icon: Icons.camera_alt_outlined,
-                      title: "Live Photo",
-                      subtitle: "Take your live photo",
-                      isCompleted: isSelfieDone,
-                      onTap: () => _triggerSpecificStep(KycStep.selfie),
-                    ),
-                    Divider(height: 1, color: Colors.grey.shade100, indent: 64),
-                    _buildStepRow(
-                      icon: Icons.badge_outlined,
-                      title: "Aadhaar Front",
-                      subtitle: "Capture front side of Aadhaar",
-                      isCompleted: isFrontDone,
-                      onTap: () => _triggerSpecificStep(KycStep.aadhaarFront),
-                    ),
-                    Divider(height: 1, color: Colors.grey.shade100, indent: 64),
-                    _buildStepRow(
-                      icon: Icons.badge_outlined,
-                      title: "Aadhaar Back",
-                      subtitle: "Capture back side of Aadhaar",
-                      isCompleted: isBackDone,
-                      onTap: () => _triggerSpecificStep(KycStep.aadhaarBack),
-                    ),
-                  ],
+                child: Icon(
+                  isCompleted
+                      ? Icons.check_rounded
+                      : isLocked
+                          ? Icons.lock_rounded
+                          : Icons.chevron_right_rounded,
+                  color: isCompleted
+                      ? const Color(0xFF16A34A)
+                      : isLocked
+                          ? const Color(0xFF9CA3AF)
+                          : brightPurple,
+                  size: 20,
                 ),
               ),
-
-              const Spacer(flex: 2),
-
-              // Start KYC Button
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: _triggerStartKyc,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4313B8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    "Start KYC",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Safe & Secure footer
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.lock_outline, color: Colors.grey.shade400, size: 14),
-                  const SizedBox(width: 6),
-                  Text(
-                    "Your information is safe and secure",
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -275,127 +1171,228 @@ class _KycScreenState extends State<KycScreen> {
     );
   }
 
-  // --- VIEW 2: KYC Submitted/Under Review View ---
+  Widget _buildStepBadge({
+    required String text,
+    required Color backgroundColor,
+    required Color textColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 7,
+        vertical: 3,
+      ),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 8,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // KYC UNDER-REVIEW SCREEN
+  // =========================================================
+
   Widget _buildSubmittedView() {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text("Complete KYC", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
-        centerTitle: true,
-      ),
+      backgroundColor:
+          pageBackground,
+
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding:
+              const EdgeInsets.all(
+            24,
+          ),
+
           child: Column(
             children: [
-              const Spacer(flex: 1),
+              // Header
 
-              // Interactive Shield Icon for simulator debugging
+              Row(
+                children: [
+                  _buildBackButton(),
+
+                  const Expanded(
+                    child: Text(
+                      "KYC Verification",
+
+                      textAlign:
+                          TextAlign.center,
+
+                      style:
+                          TextStyle(
+                        color: darkText,
+
+                        fontSize: 20,
+
+                        fontWeight:
+                            FontWeight.w800,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(
+                    height: 44,
+                    width: 44,
+                  ),
+                ],
+              ),
+
+              const Spacer(),
+
+              // Double-tap for developer approval
+
               GestureDetector(
                 onDoubleTap: () {
                   setState(() {
-                    _kycService.simulateVerificationApproval();
+                    _kycService
+                        .simulateVerificationApproval();
                   });
-                  ScaffoldMessenger.of(context).showSnackBar(
+
+                  ScaffoldMessenger
+                      .of(context)
+                      .showSnackBar(
                     const SnackBar(
-                      content: Text("Developer mode: KYC Verification Approved! ✅"),
-                      backgroundColor: Colors.green,
+                      content: Text(
+                        "Developer mode: KYC approved",
+                      ),
+
+                      backgroundColor:
+                          Colors.green,
                     ),
                   );
                 },
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      height: 110,
-                      width: 110,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFEEF2FF),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.shield,
-                        color: Color(0xFF4313B8),
-                        size: 64,
-                      ),
+
+                child: Container(
+                  height: 130,
+                  width: 130,
+
+                  decoration:
+                      const BoxDecoration(
+                    color: Color(
+                      0xFFF2EEFF,
                     ),
-                    const Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ],
+
+                    shape:
+                        BoxShape.circle,
+                  ),
+
+                  child:
+                      const Icon(
+                    Icons
+                        .hourglass_top_rounded,
+
+                    color:
+                        brightPurple,
+
+                    size: 65,
+                  ),
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(
+                height: 28,
+              ),
 
               const Text(
                 "KYC Submitted!",
+
                 style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
+                  color: darkText,
+
+                  fontSize: 27,
+
+                  fontWeight:
+                      FontWeight.w800,
                 ),
               ),
-              const SizedBox(height: 6),
+
+              const SizedBox(
+                height: 9,
+              ),
+
               const Text(
-                "Your KYC is under review",
+                "Your information has been submitted\nand is currently under review.",
+
+                textAlign:
+                    TextAlign.center,
+
                 style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
+                  color: greyText,
+
+                  fontSize: 13,
+
+                  height: 1.5,
                 ),
               ),
 
-              const Spacer(flex: 1),
+              const Spacer(),
 
-              // Review items status
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.grey.shade100, width: 1.5),
-                ),
-                child: Column(
-                  children: [
-                    _buildStatusRow("Live Photo", "Captured"),
-                    Divider(height: 1, color: Colors.grey.shade100, indent: 56),
-                    _buildStatusRow("Aadhaar Front", "Captured"),
-                    Divider(height: 1, color: Colors.grey.shade100, indent: 56),
-                    _buildStatusRow("Aadhaar Back", "Captured"),
-                  ],
-                ),
+              _buildStatusCard(
+                status: "Captured",
               ),
 
-              const Spacer(flex: 1),
+              const SizedBox(
+                height: 18,
+              ),
 
-              // Info Alert
               Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F3FF),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFDDD6FE).withOpacity(0.5)),
+                padding:
+                    const EdgeInsets.all(
+                  16,
                 ),
-                child: Row(
+
+                decoration:
+                    BoxDecoration(
+                  color:
+                      const Color(
+                    0xFFF2EEFF,
+                  ),
+
+                  borderRadius:
+                      BorderRadius.circular(
+                    17,
+                  ),
+                ),
+
+                child:
+                    const Row(
                   children: [
-                    const Icon(Icons.info_outline, color: Color(0xFF4313B8), size: 22),
-                    const SizedBox(width: 14),
+                    Icon(
+                      Icons
+                          .info_outline_rounded,
+
+                      color:
+                          brightPurple,
+                    ),
+
+                    SizedBox(
+                      width: 12,
+                    ),
+
                     Expanded(
                       child: Text(
-                        "It usually takes a few minutes to verify. You will get notified once it's approved.",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: const Color(0xFF4313B8).withOpacity(0.85),
-                          fontWeight: FontWeight.w600,
+                        "Verification usually takes a few minutes. You will be notified after approval.",
+
+                        style:
+                            TextStyle(
+                          color:
+                              brandPurple,
+
+                          fontSize: 11,
+
                           height: 1.4,
+
+                          fontWeight:
+                              FontWeight.w600,
                         ),
                       ),
                     ),
@@ -403,31 +1400,17 @@ class _KycScreenState extends State<KycScreen> {
                 ),
               ),
 
-              const Spacer(flex: 2),
+              const Spacer(),
 
-              // Go to Home Button
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Navigate back to Home
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4313B8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    "Go to Home",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                ),
+              _buildBottomButton(
+                title: "Go to Home",
+
+                onPressed: () {
+                  Navigator.pop(
+                    context,
+                  );
+                },
               ),
-              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -435,113 +1418,150 @@ class _KycScreenState extends State<KycScreen> {
     );
   }
 
-  // --- VIEW 3: KYC Verified View ---
+  // =========================================================
+  // KYC VERIFIED SCREEN
+  // =========================================================
+
   Widget _buildVerifiedView() {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text("KYC Verified", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
-        centerTitle: true,
-      ),
+      backgroundColor:
+          pageBackground,
+
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding:
+              const EdgeInsets.all(
+            24,
+          ),
+
           child: Column(
             children: [
-              const Spacer(flex: 1),
+              // Header
 
-              // Verified Checkmark with custom confetti rings
-              Stack(
-                alignment: Alignment.center,
+              Row(
                 children: [
-                  Container(
-                    height: 110,
-                    width: 110,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE6F7F0),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check_circle,
-                      color: Color(0xFF10B981),
-                      size: 80,
+                  _buildBackButton(),
+
+                  const Expanded(
+                    child: Text(
+                      "KYC Verified",
+
+                      textAlign:
+                          TextAlign.center,
+
+                      style:
+                          TextStyle(
+                        color: darkText,
+
+                        fontSize: 20,
+
+                        fontWeight:
+                            FontWeight.w800,
+                      ),
                     ),
                   ),
-                  // Confetti bits simulation
+
+                  const SizedBox(
+                    height: 44,
+                    width: 44,
+                  ),
+                ],
+              ),
+
+              const Spacer(),
+
+              Stack(
+                alignment:
+                    Alignment.center,
+
+                children: [
+                  Container(
+                    height: 130,
+                    width: 130,
+
+                    decoration:
+                        const BoxDecoration(
+                      color: Color(
+                        0xFFF0FDF4,
+                      ),
+
+                      shape:
+                          BoxShape.circle,
+                    ),
+
+                    child:
+                        const Icon(
+                      Icons
+                          .verified_user_rounded,
+
+                      color:
+                          Color(
+                        0xFF16A34A,
+                      ),
+
+                      size: 72,
+                    ),
+                  ),
+
                   ..._buildConfettiDecorations(),
                 ],
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(
+                height: 29,
+              ),
 
               const Text(
                 "KYC Verified!",
+
                 style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
+                  color: darkText,
+
+                  fontSize: 27,
+
+                  fontWeight:
+                      FontWeight.w800,
                 ),
               ),
-              const SizedBox(height: 6),
+
+              const SizedBox(
+                height: 9,
+              ),
+
               const Text(
-                "You can now enjoy all features",
+                "Your identity has been verified.\nYou can now enjoy all Evegah features.",
+
+                textAlign:
+                    TextAlign.center,
+
                 style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
+                  color: greyText,
+
+                  fontSize: 13,
+
+                  height: 1.5,
                 ),
               ),
 
-              const Spacer(flex: 1),
+              const Spacer(),
 
-              // Verified items list
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.grey.shade100, width: 1.5),
-                ),
-                child: Column(
-                  children: [
-                    _buildStatusRow("Live Photo", "Verified"),
-                    Divider(height: 1, color: Colors.grey.shade100, indent: 56),
-                    _buildStatusRow("Aadhaar Front", "Verified"),
-                    Divider(height: 1, color: Colors.grey.shade100, indent: 56),
-                    _buildStatusRow("Aadhaar Back", "Verified"),
-                  ],
-                ),
+              _buildStatusCard(
+                status: "Verified",
               ),
 
-              const Spacer(flex: 3),
-
-              // Explore Now Button
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4313B8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    "Explore Now",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                ),
+              const Spacer(
+                flex: 2,
               ),
-              const SizedBox(height: 24),
+
+              _buildBottomButton(
+                title: "Explore Now",
+
+                onPressed: () {
+                  Navigator.pop(
+                    context,
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -549,102 +1569,295 @@ class _KycScreenState extends State<KycScreen> {
     );
   }
 
-  // Row builder for Welcome view list
-  Widget _buildStepRow({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool isCompleted,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      leading: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: const Color(0xFFEEF2FF),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Icon(icon, color: const Color(0xFF4313B8), size: 22),
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black),
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 2),
-        child: Text(
-          subtitle,
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-        ),
-      ),
-      trailing: isCompleted
-          ? Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                color: Color(0xFFE6F7F0),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.check, color: Color(0xFF10B981), size: 14),
-            )
-          : IconButton(
-              icon: Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey.shade400, size: 14),
-              onPressed: onTap,
-            ),
-      onTap: isCompleted ? null : onTap,
-    );
-  }
+  // =========================================================
+  // BACK BUTTON
+  // =========================================================
 
-  // Row builder for Submitted/Verified view list
-  Widget _buildStatusRow(String stepName, String statusLabel) {
-    final bool isVerified = statusLabel == "Verified";
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      leading: Container(
-        height: 36,
-        width: 36,
-        decoration: BoxDecoration(
-          color: isVerified ? const Color(0xFFE6F7F0) : const Color(0xFFF1F5F9),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          Icons.check,
-          color: isVerified ? const Color(0xFF10B981) : Colors.grey.shade600,
-          size: 16,
-        ),
-      ),
-      title: Text(
-        stepName,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black),
-      ),
-      trailing: Text(
-        statusLabel,
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 12,
-          color: isVerified ? const Color(0xFF10B981) : Colors.grey.shade500,
-        ),
-      ),
-    );
-  }
+  Widget _buildBackButton() {
+    return Material(
+      color: Colors.transparent,
 
-  // Simple Confetti decorations
-  List<Widget> _buildConfettiDecorations() {
-    final List<Color> colors = [Colors.purple, Colors.blue, Colors.orange, Colors.red, Colors.green];
-    return List.generate(12, (index) {
-      double angle = (index * 30) * 3.14159 / 180;
-      double radius = 70.0;
-      return Transform.translate(
-        offset: Offset(radius * math.cos(angle), radius * math.sin(angle)),
+      child: InkWell(
+        onTap: () {
+          Navigator.pop(
+            context,
+          );
+        },
+
+        borderRadius:
+            BorderRadius.circular(
+          14,
+        ),
+
         child: Container(
-          width: 6,
-          height: 6,
-          decoration: BoxDecoration(
-            color: colors[index % colors.length],
-            shape: BoxShape.circle,
+          height: 44,
+          width: 44,
+
+          decoration:
+              BoxDecoration(
+            color: Colors.white,
+
+            borderRadius:
+                BorderRadius.circular(
+              14,
+            ),
+
+            border: Border.all(
+              color: lightBorder,
+            ),
+          ),
+
+          child: const Icon(
+            Icons
+                .arrow_back_ios_new_rounded,
+
+            color: darkText,
+
+            size: 18,
           ),
         ),
-      );
-    });
+      ),
+    );
+  }
+
+  // =========================================================
+  // BOTTOM BUTTON
+  // =========================================================
+
+  Widget _buildBottomButton({
+    required String title,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+
+      height: 57,
+
+      child: ElevatedButton(
+        onPressed: onPressed,
+
+        style:
+            ElevatedButton.styleFrom(
+          elevation: 0,
+
+          backgroundColor:
+              brightPurple,
+
+          foregroundColor:
+              Colors.white,
+
+          shape:
+              RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(
+              18,
+            ),
+          ),
+        ),
+
+        child: Text(
+          title,
+
+          style:
+              const TextStyle(
+            fontSize: 16,
+
+            fontWeight:
+                FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // KYC STATUS CARD
+  // =========================================================
+
+  Widget _buildStatusCard({
+    required String status,
+  }) {
+    return Container(
+      decoration:
+          BoxDecoration(
+        color: Colors.white,
+
+        borderRadius:
+            BorderRadius.circular(
+          22,
+        ),
+
+        border: Border.all(
+          color: lightBorder,
+        ),
+      ),
+
+      child: Column(
+        children: [
+          _buildStatusRow(
+            "Live Photo",
+            status,
+          ),
+
+          const Divider(
+            height: 1,
+            indent: 64,
+          ),
+
+          _buildStatusRow(
+            "Aadhaar Front",
+            status,
+          ),
+
+          const Divider(
+            height: 1,
+            indent: 64,
+          ),
+
+          _buildStatusRow(
+            "Aadhaar Back",
+            status,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================
+  // STATUS ROW
+  // =========================================================
+
+  Widget _buildStatusRow(
+    String stepName,
+    String status,
+  ) {
+    final bool isVerified =
+        status == "Verified";
+
+    return ListTile(
+      contentPadding:
+          const EdgeInsets.symmetric(
+        horizontal: 18,
+        vertical: 4,
+      ),
+
+      leading: Container(
+        height: 37,
+        width: 37,
+
+        decoration:
+            BoxDecoration(
+          color: isVerified
+              ? const Color(
+                  0xFFF0FDF4,
+                )
+              : const Color(
+                  0xFFF2EEFF,
+                ),
+
+          shape:
+              BoxShape.circle,
+        ),
+
+        child: Icon(
+          Icons.check_rounded,
+
+          color: isVerified
+              ? const Color(
+                  0xFF16A34A,
+                )
+              : brightPurple,
+
+          size: 19,
+        ),
+      ),
+
+      title: Text(
+        stepName,
+
+        style:
+            const TextStyle(
+          color: darkText,
+
+          fontSize: 14,
+
+          fontWeight:
+              FontWeight.w700,
+        ),
+      ),
+
+      trailing: Text(
+        status,
+
+        style: TextStyle(
+          color: isVerified
+              ? const Color(
+                  0xFF16A34A,
+                )
+              : brightPurple,
+
+          fontSize: 11,
+
+          fontWeight:
+              FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // CONFETTI DECORATIONS
+  // =========================================================
+
+  List<Widget>
+      _buildConfettiDecorations() {
+    final List<Color> colors = [
+      brightPurple,
+      limeGreen,
+      Colors.orange,
+      Colors.blue,
+      Colors.green,
+    ];
+
+    return List.generate(
+      12,
+      (index) {
+        final double angle =
+            (index * 30) *
+                math.pi /
+                180;
+
+        const double radius = 76;
+
+        return Transform.translate(
+          offset: Offset(
+            radius *
+                math.cos(
+                  angle,
+                ),
+
+            radius *
+                math.sin(
+                  angle,
+                ),
+          ),
+
+          child: Container(
+            height: 6,
+            width: 6,
+
+            decoration:
+                BoxDecoration(
+              color: colors[
+                  index %
+                      colors.length],
+
+              shape:
+                  BoxShape.circle,
+            ),
+          ),
+        );
+      },
+    );
   }
 }

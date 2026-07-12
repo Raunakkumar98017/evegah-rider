@@ -1,922 +1,1256 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'dart:io';
+
 import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
-import '../../data/services/kyc_service.dart';
+
 import 'kyc_preview_screen.dart';
 
-enum KycStep { selfie, aadhaarFront, aadhaarBack }
+enum KycStep {
+  selfie,
+  aadhaarFront,
+  aadhaarBack,
+}
 
 class KycCameraScreen extends StatefulWidget {
   final KycStep step;
 
-  const KycCameraScreen({super.key, required this.step});
+  // true  = Start Verification flow
+  // false = User opened one individual KYC step
+  final bool continueToNextStep;
+
+  const KycCameraScreen({
+    super.key,
+    required this.step,
+    this.continueToNextStep = true,
+  });
 
   @override
-  State<KycCameraScreen> createState() => _KycCameraScreenState();
+  State<KycCameraScreen> createState() =>
+      _KycCameraScreenState();
 }
 
-class _KycCameraScreenState extends State<KycCameraScreen> with SingleTickerProviderStateMixin {
-  CameraController? _cameraController;
-  List<CameraDescription>? _cameras;
-  bool _isCameraInitialized = false;
-  bool _isCameraError = false;
-  bool _isFrontCamera = false;
-  bool _isFlashOn = false;
-  
-  // Alignment & Match border feedback
-  bool _isAligned = false;
-  Timer? _alignmentTimer;
+class _KycCameraScreenState
+    extends State<KycCameraScreen>
+    with WidgetsBindingObserver {
+  // =========================================================
+  // BRAND COLORS
+  // =========================================================
 
-  // Animation for scanner line in simulator mode
-  late AnimationController _scannerAnimController;
-  late Animation<double> _scannerAnimation;
+  static const Color brandPurple =
+      Color(0xFF4B16C8);
+
+  static const Color darkPurple =
+      Color(0xFF24105E);
+
+  static const Color brandGreen =
+      Color(0xFF12B981);
+
+  static const Color pageBackground =
+      Color(0xFFF8F9FD);
+
+  static const Color darkText =
+      Color(0xFF111827);
+
+  static const Color greyText =
+      Color(0xFF64748B);
+
+  // =========================================================
+  // CAMERA VARIABLES
+  // =========================================================
+
+  CameraController? _cameraController;
+
+  List<CameraDescription> _cameras = [];
+
+  bool _isCameraReady = false;
+
+  bool _isCapturing = false;
+
+  bool _isPositionReady = false;
+
+  int _selectedCameraIndex = 0;
+
+  Timer? _positionTimer;
+
+  final ImagePicker _imagePicker =
+      ImagePicker();
+
+  // =========================================================
+  // INITIALIZE
+  // =========================================================
 
   @override
   void initState() {
     super.initState();
-    _isFrontCamera = widget.step == KycStep.selfie;
-    
-    _scannerAnimController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    )..repeat(reverse: true);
-    
-    _scannerAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_scannerAnimController);
 
-    _initCameraFlow();
-    _startAlignmentSimulation();
+    WidgetsBinding.instance.addObserver(this);
+
+    _initializeCamera();
+
+    // This only changes the UI status.
+    // It is not real face detection.
+    _positionTimer = Timer(
+      const Duration(
+        milliseconds: 1500,
+      ),
+      () {
+        if (mounted) {
+          setState(() {
+            _isPositionReady = true;
+          });
+        }
+      },
+    );
   }
+
+  // =========================================================
+  // APP LIFECYCLE
+  // =========================================================
 
   @override
-  void dispose() {
-    _cameraController?.dispose();
-    _scannerAnimController.dispose();
-    _alignmentTimer?.cancel();
-    super.dispose();
+  void didChangeAppLifecycleState(
+    AppLifecycleState state,
+  ) {
+    final CameraController? controller =
+        _cameraController;
+
+    if (controller == null ||
+        !controller.value.isInitialized) {
+      return;
+    }
+
+    if (state == AppLifecycleState.inactive) {
+      controller.dispose();
+    } else if (
+        state == AppLifecycleState.resumed) {
+      _initializeCamera();
+    }
   }
 
-  void _startAlignmentSimulation() {
-    _alignmentTimer?.cancel();
-    setState(() {
-      _isAligned = false;
-    });
-    _alignmentTimer = Timer(const Duration(milliseconds: 1800), () {
-      if (mounted) {
-        setState(() {
-          _isAligned = true;
-        });
-      }
-    });
-  }
+  // =========================================================
+  // INITIALIZE CAMERA
+  // =========================================================
 
-  Future<void> _initCameraFlow() async {
+  Future<void> _initializeCamera() async {
     try {
-      // 1. Request Permission
-      var status = await Permission.camera.request();
-      if (status.isDenied) {
-        setState(() {
-          _isCameraError = true;
-        });
-        return;
-      }
-
-      // 2. Get Available Cameras
       _cameras = await availableCameras();
-      if (_cameras == null || _cameras!.isEmpty) {
-        setState(() {
-          _isCameraError = true;
-        });
+
+      if (_cameras.isEmpty) {
         return;
       }
 
-      // 3. Initialize Controller
-      await _setupCameraController();
-    } catch (e) {
-      debugPrint("Camera init error: $e");
-      setState(() {
-        _isCameraError = true;
-      });
+      // Use front camera for Live Photo.
+      if (widget.step == KycStep.selfie) {
+        final int frontCameraIndex =
+            _cameras.indexWhere(
+          (camera) =>
+              camera.lensDirection ==
+              CameraLensDirection.front,
+        );
+
+        _selectedCameraIndex =
+            frontCameraIndex >= 0
+                ? frontCameraIndex
+                : 0;
+      } else {
+        // Use back camera for Aadhaar.
+        final int backCameraIndex =
+            _cameras.indexWhere(
+          (camera) =>
+              camera.lensDirection ==
+              CameraLensDirection.back,
+        );
+
+        _selectedCameraIndex =
+            backCameraIndex >= 0
+                ? backCameraIndex
+                : 0;
+      }
+
+      await _startCamera(
+        _selectedCameraIndex,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      _showMessage(
+        "Unable to open the camera.",
+      );
     }
   }
 
-  Future<void> _setupCameraController() async {
-    if (_cameras == null || _cameras!.isEmpty) return;
+  // =========================================================
+  // START CAMERA
+  // =========================================================
 
-    // Pick camera description
-    CameraDescription selectedCam = _cameras!.first;
-    if (_isFrontCamera) {
-      final frontCam = _cameras!.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.front,
-        orElse: () => _cameras!.first,
-      );
-      selectedCam = frontCam;
-    } else {
-      final backCam = _cameras!.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.back,
-        orElse: () => _cameras!.first,
-      );
-      selectedCam = backCam;
-    }
+  Future<void> _startCamera(
+    int cameraIndex,
+  ) async {
+    setState(() {
+      _isCameraReady = false;
+    });
 
-    _cameraController = CameraController(
-      selectedCam,
+    await _cameraController?.dispose();
+
+    final CameraController controller =
+        CameraController(
+      _cameras[cameraIndex],
       ResolutionPreset.high,
       enableAudio: false,
+      imageFormatGroup:
+          ImageFormatGroup.jpeg,
     );
 
-    try {
-      await _cameraController!.initialize();
-      if (mounted) {
-        setState(() {
-          _isCameraInitialized = true;
-          _isCameraError = false;
-        });
-        _startAlignmentSimulation();
-      }
-    } catch (e) {
-      debugPrint("CameraController initialization failed: $e");
-      if (mounted) {
-        setState(() {
-          _isCameraError = true;
-        });
-      }
-    }
-  }
+    _cameraController = controller;
 
-  Future<void> _toggleCameraLens() async {
-    setState(() {
-      _isCameraInitialized = false;
-      _isFrontCamera = !_isFrontCamera;
-    });
-    await _setupCameraController();
-  }
-
-  Future<void> _toggleFlash() async {
-    if (_cameraController == null || !_isCameraInitialized) return;
     try {
-      if (_isFlashOn) {
-        await _cameraController!.setFlashMode(FlashMode.off);
-      } else {
-        await _cameraController!.setFlashMode(FlashMode.torch);
+      await controller.initialize();
+
+      if (!mounted) {
+        return;
       }
+
       setState(() {
-        _isFlashOn = !_isFlashOn;
+        _isCameraReady = true;
       });
-    } catch (e) {
-      debugPrint("Flash toggle error: $e");
-    }
-  }
-
-  // Gallery picker fallback
-  Future<void> _pickFromGallery() async {
-    try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 90,
-      );
-
-      if (pickedFile != null && mounted) {
-        _navigateToPreview(pickedFile.path);
+    } catch (error) {
+      if (!mounted) {
+        return;
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error picking photo: $e")),
+
+      _showMessage(
+        "Camera initialization failed.",
       );
     }
   }
 
-  // Shutter capture action
+  // =========================================================
+  // CAPTURE PHOTO
+  // =========================================================
+
   Future<void> _capturePhoto() async {
-    if (_cameraController == null || !_isCameraInitialized) {
-      // Simulator mode: Capture a dummy file or pick from gallery
-      _simulateCapture();
+    final CameraController? controller =
+        _cameraController;
+
+    if (controller == null ||
+        !controller.value.isInitialized ||
+        _isCapturing) {
       return;
     }
 
     try {
-      final XFile file = await _cameraController!.takePicture();
-      // If torch was on, turn it off after capture
-      if (_isFlashOn) {
-        await _cameraController!.setFlashMode(FlashMode.off);
-        _isFlashOn = false;
+      setState(() {
+        _isCapturing = true;
+      });
+
+      final XFile capturedImage =
+          await controller.takePicture();
+
+      if (!mounted) {
+        return;
       }
-      _navigateToPreview(file.path);
-    } catch (e) {
-      debugPrint("Capture error: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Capture failed: $e. Using simulation fallback.")),
+
+      await _openPreview(
+        capturedImage.path,
       );
-      _simulateCapture();
+    } catch (error) {
+      if (mounted) {
+        _showMessage(
+          "Unable to capture the photo.",
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCapturing = false;
+        });
+      }
     }
   }
 
-  void _simulateCapture() {
-    // Show a dialog warning or just pick/simulate a placeholder
-    // In simulator mode, let's open the gallery to simulate a picture or use a mock asset path.
-    // For ease of developer testing, we'll open gallery when simulator capture is tapped.
-    _pickFromGallery();
+  // =========================================================
+  // SELECT FROM GALLERY
+  // =========================================================
+
+  Future<void> _selectFromGallery() async {
+    try {
+      final XFile? selectedImage =
+          await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 90,
+      );
+
+      if (selectedImage == null ||
+          !mounted) {
+        return;
+      }
+
+      await _openPreview(
+        selectedImage.path,
+      );
+    } catch (error) {
+      if (mounted) {
+        _showMessage(
+          "Unable to select the image.",
+        );
+      }
+    }
   }
 
-  void _navigateToPreview(String path) {
-    Navigator.push(
+  // =========================================================
+  // OPEN PREVIEW
+  // =========================================================
+
+  Future<void> _openPreview(
+    String imagePath,
+  ) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => KycPreviewScreen(
+        builder: (context) =>
+            KycPreviewScreen(
           step: widget.step,
-          imagePath: path,
+          imagePath: imagePath,
+          continueToNextStep:
+              widget.continueToNextStep,
         ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    String title = "";
-    String subtitle = "";
-    String footerText = "";
-    int currentStep = 1;
+  // =========================================================
+  // SWITCH CAMERA
+  // =========================================================
 
-    switch (widget.step) {
-      case KycStep.selfie:
-        title = "Take a clear live photo";
-        subtitle = "Make sure your face is clearly visible";
-        footerText = "Ensure good lighting and look straight at the camera";
-        currentStep = 1;
-        break;
-      case KycStep.aadhaarFront:
-        title = "Capture Aadhaar Front";
-        subtitle = "Place your Aadhaar card inside the frame";
-        footerText = "Tip: Ensure all details are clearly visible";
-        currentStep = 2;
-        break;
-      case KycStep.aadhaarBack:
-        title = "Capture Aadhaar Back";
-        subtitle = "Place your Aadhaar card inside the frame";
-        footerText = "Tip: Ensure all details are clearly visible";
-        currentStep = 3;
-        break;
+  Future<void> _switchCamera() async {
+    if (_cameras.length < 2) {
+      _showMessage(
+        "No other camera is available.",
+      );
+
+      return;
     }
 
+    _selectedCameraIndex =
+        (_selectedCameraIndex + 1) %
+            _cameras.length;
+
+    await _startCamera(
+      _selectedCameraIndex,
+    );
+  }
+
+  // =========================================================
+  // SCREEN DATA
+  // =========================================================
+
+  String get _screenTitle {
+    switch (widget.step) {
+      case KycStep.selfie:
+        return "Live Photo";
+
+      case KycStep.aadhaarFront:
+        return "Aadhaar Front";
+
+      case KycStep.aadhaarBack:
+        return "Aadhaar Back";
+    }
+  }
+
+  String get _mainInstruction {
+    switch (widget.step) {
+      case KycStep.selfie:
+        return "Position your face";
+
+      case KycStep.aadhaarFront:
+        return "Position Aadhaar front";
+
+      case KycStep.aadhaarBack:
+        return "Position Aadhaar back";
+    }
+  }
+
+  String get _secondaryInstruction {
+    switch (widget.step) {
+      case KycStep.selfie:
+        return "Keep your face inside the guide";
+
+      case KycStep.aadhaarFront:
+        return "Keep all four corners visible";
+
+      case KycStep.aadhaarBack:
+        return "Keep all details clear and readable";
+    }
+  }
+
+  int get _currentStep {
+    switch (widget.step) {
+      case KycStep.selfie:
+        return 1;
+
+      case KycStep.aadhaarFront:
+        return 2;
+
+      case KycStep.aadhaarBack:
+        return 3;
+    }
+  }
+
+  // =========================================================
+  // MESSAGE
+  // =========================================================
+
+  void _showMessage(
+    String message,
+  ) {
+    ScaffoldMessenger.of(context)
+        .hideCurrentSnackBar();
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior:
+            SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // =========================================================
+  // DISPOSE
+  // =========================================================
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance
+        .removeObserver(this);
+
+    _positionTimer?.cancel();
+
+    _cameraController?.dispose();
+
+    super.dispose();
+  }
+
+  // =========================================================
+  // BUILD
+  // =========================================================
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
     return Scaffold(
-      backgroundColor: Colors.white, // White background for the header area
+      backgroundColor: pageBackground,
+
       body: SafeArea(
         child: Column(
           children: [
-            // AppBar and Custom Stepper
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _buildHeader(currentStep),
-            ),
+            // =================================================
+            // HEADER
+            // =================================================
 
-            // Instructional text
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Column(
+            Padding(
+              padding:
+                  const EdgeInsets.fromLTRB(
+                18,
+                12,
+                18,
+                4,
+              ),
+              child: Row(
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Color(0xFF1E293B),
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                  _buildBackButton(),
+
+                  Expanded(
+                    child: Text(
+                      _screenTitle,
+                      textAlign:
+                          TextAlign.center,
+                      style:
+                          const TextStyle(
+                        color: darkText,
+                        fontSize: 20,
+                        fontWeight:
+                            FontWeight.w800,
+                      ),
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 13,
+
+                  Container(
+                    padding:
+                        const EdgeInsets
+                            .symmetric(
+                      horizontal: 10,
+                      vertical: 6,
                     ),
-                    textAlign: TextAlign.center,
+                    decoration:
+                        BoxDecoration(
+                      color:
+                          const Color(
+                        0xFFF0EBFF,
+                      ),
+                      borderRadius:
+                          BorderRadius
+                              .circular(
+                        20,
+                      ),
+                    ),
+                    child: Text(
+                      "$_currentStep of 3",
+                      style:
+                          const TextStyle(
+                        color:
+                            brandPurple,
+                        fontSize: 10,
+                        fontWeight:
+                            FontWeight.w800,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
 
-            // Camera Viewport Area (Frosted Rounded Card Container)
+            // =================================================
+            // PAGE CONTENT
+            // =================================================
+
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 16,
-                        spreadRadius: 2,
-                      )
-                    ],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      if (_isCameraInitialized && _cameraController != null)
-                        Center(
-                          child: AspectRatio(
-                            aspectRatio: 1 / _cameraController!.value.aspectRatio,
-                            child: CameraPreview(_cameraController!),
-                          ),
-                        )
-                      else
-                        // Camera Simulator View
-                        _buildSimulatorView(),
+  child: Padding(
+    padding: const EdgeInsets.fromLTRB(
+      20,
+      10,
+      20,
+      14,
+    ),
+    child: Column(
+      children: [
+        // Progress indicator
 
-                      // Transparent Cutout Overlay
-                      Positioned.fill(
-                        child: CustomPaint(
-                          painter: CameraOverlayPainter(
-                            isFace: widget.step == KycStep.selfie,
-                            isAligned: _isAligned,
-                            borderColor: _isAligned
-                                ? const Color(0xFF10B981)
-                                : (widget.step == KycStep.selfie
-                                    ? Colors.white.withOpacity(0.85)
-                                    : const Color(0xFF4313B8)),
-                          ),
-                        ),
-                      ),
+        _buildProgressIndicator(),
 
-                      // Floating Green Match Badge
-                      if (_isAligned)
-                        Positioned(
-                          top: 20,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF10B981),
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF10B981).withOpacity(0.3),
-                                  blurRadius: 10,
-                                  spreadRadius: 2,
-                                )
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  widget.step == KycStep.selfie ? "FACE MATCHED" : "DOCUMENT ALIGNED",
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.8,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                      // Scanner Line for visual feedback on simulator or camera
-                      if (!_isCameraInitialized)
-                        _buildScannerLine(),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Footer instructions & controls
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                footerText,
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 11, fontWeight: FontWeight.w500),
-              ),
-            ),
-
-            _buildControlsBar(),
-          ],
+        const SizedBox(
+          height: 14,
         ),
-      ),
-    );
-  }
 
-  Widget _buildHeader(int step) {
-    String stepTitle = "";
-    switch (widget.step) {
-      case KycStep.selfie:
-        stepTitle = "Live Photo";
-        break;
-      case KycStep.aadhaarFront:
-        stepTitle = "Aadhaar Front";
-        break;
-      case KycStep.aadhaarBack:
-        stepTitle = "Aadhaar Back";
-        break;
-    }
+        // Main instruction
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-                onPressed: () => Navigator.pop(context),
-              ),
-              Expanded(
-                child: Text(
-                  stepTitle,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(width: 48), // Balancing back button
-            ],
+        Text(
+          _mainInstruction,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: darkText,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.4,
           ),
-          const SizedBox(height: 16),
-          // STEPPER
-          KycStepperHeader(activeStep: step),
-        ],
-      ),
-    );
-  }
+        ),
 
-  Widget _buildSimulatorView() {
-    return Container(
-      color: const Color(0xFF1E293B),
-      child: Center(
-        child: Column(
+        const SizedBox(
+          height: 5,
+        ),
+
+        // Secondary instruction
+
+        Text(
+          _secondaryInstruction,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: greyText,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+
+        const SizedBox(
+          height: 14,
+        ),
+
+        // Camera automatically uses the remaining space
+
+        Expanded(
+          child: _buildCameraCard(),
+        ),
+
+        const SizedBox(
+          height: 10,
+        ),
+
+        // Bottom instruction
+
+        Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              widget.step == KycStep.selfie ? Icons.face_retouching_natural : Icons.badge_outlined,
-              color: Colors.white.withOpacity(0.15),
-              size: 120,
+            const Icon(
+              Icons.light_mode_outlined,
+              color: brandPurple,
+              size: 16,
             ),
-            const SizedBox(height: 20),
-            Text(
-              _isCameraError ? "Camera Unavailable" : "Simulator Camera",
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+
+            const SizedBox(
+              width: 6,
+            ),
+
+            Flexible(
+              child: Text(
+                widget.step == KycStep.selfie
+                    ? "Use good lighting and look straight at the camera"
+                    : "Avoid glare and keep the document details visible",
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: greyText,
+                  fontSize: 10,
+                ),
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              "Tap the center shutter to select from gallery",
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.3),
-                fontSize: 12,
-              ),
-            ),
+          ],
+        ),
+      ],
+    ),
+  ),
+),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildScannerLine() {
-    return AnimatedBuilder(
-      animation: _scannerAnimation,
-      builder: (context, child) {
-        return Positioned(
-          top: MediaQuery.of(context).size.height * 0.4 * _scannerAnimation.value,
-          left: 32,
-          right: 32,
-          child: Container(
-            height: 2,
-            decoration: BoxDecoration(
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF4313B8).withOpacity(0.8),
-                  blurRadius: 10,
-                  spreadRadius: 2,
-                )
-              ],
-              color: const Color(0xFF4313B8),
+  // =========================================================
+  // BACK BUTTON
+  // =========================================================
+
+  Widget _buildBackButton() {
+    return Material(
+      color: Colors.white,
+
+      shape: const CircleBorder(),
+
+      child: InkWell(
+        onTap: () {
+          Navigator.pop(context);
+        },
+
+        customBorder:
+            const CircleBorder(),
+
+        child: Container(
+          height: 42,
+          width: 42,
+
+          decoration:
+              BoxDecoration(
+            shape: BoxShape.circle,
+
+            border: Border.all(
+              color:
+                  const Color(
+                0xFFE6E9F0,
+              ),
             ),
           ),
-        );
-      },
-    );
-  }
 
-  Widget _buildControlsBar() {
-    final bool canFlash = !_isFrontCamera && _isCameraInitialized;
-    
-    return Container(
-      padding: const EdgeInsets.only(bottom: 24, top: 16, left: 32, right: 32),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.55),
-        border: Border(
-          top: BorderSide(color: Colors.white.withOpacity(0.08), width: 1.2),
+          child: const Icon(
+            Icons
+                .arrow_back_rounded,
+            color: darkText,
+            size: 21,
+          ),
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Left: Gallery Button
-          GestureDetector(
-            onTap: _pickFromGallery,
-            child: Container(
-              height: 48,
-              width: 48,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withOpacity(0.15), width: 1),
-              ),
-              child: const Icon(Icons.photo_library_outlined, color: Colors.white, size: 20),
-            ),
-          ),
-
-          // Center: Shutter Button with matching glows
-          GestureDetector(
-            onTap: _capturePhoto,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                if (_isAligned)
-                  // Pulsing matching glow ring
-                  Container(
-                    height: 86,
-                    width: 86,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFF10B981).withOpacity(0.5),
-                        width: 3.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF10B981).withOpacity(0.35),
-                          blurRadius: 16,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                  ),
-                Container(
-                  height: 72,
-                  width: 72,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      )
-                    ],
-                  ),
-                  padding: const EdgeInsets.all(4),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: _isAligned ? const Color(0xFF10B981) : Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: _isAligned ? const Color(0xFF047857) : Colors.black,
-                        width: 2.5,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Right: Action Switch (Flip camera or Flash)
-          widget.step == KycStep.selfie
-              ? GestureDetector(
-                  onTap: () {
-                    _toggleCameraLens();
-                  },
-                  child: Container(
-                    height: 48,
-                    width: 48,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.12),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(0.15), width: 1),
-                    ),
-                    child: const Icon(Icons.flip_camera_ios_outlined, color: Colors.white, size: 20),
-                  ),
-                )
-              : GestureDetector(
-                  onTap: canFlash ? _toggleFlash : null,
-                  child: Container(
-                    height: 48,
-                    width: 48,
-                    decoration: BoxDecoration(
-                      color: canFlash
-                          ? (_isFlashOn ? const Color(0xFF10B981) : Colors.white.withOpacity(0.12))
-                          : Colors.white.withOpacity(0.04),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: canFlash
-                            ? (_isFlashOn ? const Color(0xFF10B981).withOpacity(0.4) : Colors.white.withOpacity(0.15))
-                            : Colors.transparent,
-                        width: 1,
-                      ),
-                    ),
-                    child: Icon(
-                      _isFlashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                      color: canFlash ? Colors.white : Colors.grey.shade600,
-                      size: 20,
-                    ),
-                  ),
-                ),
-        ],
-      ),
-    );
-  }
-}
-
-// Custom Stepper Progress Widget matching Mockups
-class KycStepperHeader extends StatelessWidget {
-  final int activeStep;
-
-  const KycStepperHeader({super.key, required this.activeStep});
-
-  @override
-  Widget build(BuildContext context) {
-    const Color activeColor = Color(0xFF4313B8);
-    const Color inactiveColor = Color(0xFFE2E8F0);
-    final KycService kycService = KycService();
-
-    bool isSelfieDone = kycService.isStepCompleted("Selfie");
-    bool isFrontDone = kycService.isStepCompleted("Aadhaar Front");
-    bool isBackDone = kycService.isStepCompleted("Aadhaar Back");
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      child: Stack(
-        alignment: Alignment.topCenter,
-        children: [
-          // Background Connecting Lines
-          Positioned(
-            top: 14, // Middle of 28px height circles
-            left: 45,
-            right: 45,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 2.0,
-                    color: isSelfieDone || activeStep > 1 ? activeColor : inactiveColor,
-                  ),
-                ),
-                Expanded(
-                  child: Container(
-                    height: 2.0,
-                    color: isFrontDone || activeStep > 2 ? activeColor : inactiveColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Steps Columns Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Step 1: Live Photo
-              _buildStepColumn(
-                stepText: "1",
-                label: "Live Photo",
-                isActive: activeStep == 1,
-                isCompleted: isSelfieDone || activeStep > 1,
-                activeColor: activeColor,
-                inactiveColor: inactiveColor,
-              ),
-              // Step 2: Aadhaar Front
-              _buildStepColumn(
-                stepText: "2",
-                label: "Aadhaar Front",
-                isActive: activeStep == 2,
-                isCompleted: isFrontDone || activeStep > 2,
-                activeColor: activeColor,
-                inactiveColor: inactiveColor,
-              ),
-              // Step 3: Aadhaar Back
-              _buildStepColumn(
-                stepText: "3",
-                label: "Aadhaar Back",
-                isActive: activeStep == 3,
-                isCompleted: isBackDone,
-                activeColor: activeColor,
-                inactiveColor: inactiveColor,
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildStepColumn({
-    required String stepText,
-    required String label,
-    required bool isActive,
-    required bool isCompleted,
-    required Color activeColor,
-    required Color inactiveColor,
-  }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+  // =========================================================
+  // PROGRESS INDICATOR
+  // =========================================================
+
+  Widget _buildProgressIndicator() {
+    return Row(
       children: [
-        _buildCircle(
-          stepText: stepText,
-          isActive: isActive,
-          isCompleted: isCompleted,
-          activeColor: activeColor,
-          inactiveColor: inactiveColor,
+        _buildProgressStep(
+          number: 1,
+          title: "Live Photo",
         ),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-            color: isActive ? activeColor : const Color(0xFF64748B),
-          ),
+
+        _buildProgressLine(
+          completed:
+              _currentStep > 1,
+        ),
+
+        _buildProgressStep(
+          number: 2,
+          title: "Aadhaar Front",
+        ),
+
+        _buildProgressLine(
+          completed:
+              _currentStep > 2,
+        ),
+
+        _buildProgressStep(
+          number: 3,
+          title: "Aadhaar Back",
         ),
       ],
     );
   }
 
-  Widget _buildCircle({
-    required String stepText,
-    required bool isActive,
-    required bool isCompleted,
-    required Color activeColor,
-    required Color inactiveColor,
+  Widget _buildProgressStep({
+    required int number,
+    required String title,
   }) {
-    if (isCompleted) {
-      return Container(
-        height: 28,
-        width: 28,
-        decoration: BoxDecoration(
-          color: activeColor,
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(Icons.check, color: Colors.white, size: 14),
-      );
-    }
+    final bool isCompleted =
+        number < _currentStep;
 
-    return Container(
-      height: 28,
-      width: 28,
-      decoration: BoxDecoration(
-        color: isActive ? activeColor : Colors.transparent,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: isActive ? activeColor : inactiveColor,
-          width: 2,
-        ),
+    final bool isActive =
+        number == _currentStep;
+
+    return SizedBox(
+      width: 78,
+
+      child: Column(
+        children: [
+          AnimatedContainer(
+            duration:
+                const Duration(
+              milliseconds: 250,
+            ),
+
+            height: 34,
+            width: 34,
+
+            decoration:
+                BoxDecoration(
+              color: isCompleted ||
+                      isActive
+                  ? brandPurple
+                  : Colors.white,
+
+              shape: BoxShape.circle,
+
+              border: Border.all(
+                color:
+                    isCompleted ||
+                            isActive
+                        ? brandPurple
+                        : const Color(
+                            0xFFDCE2EA,
+                          ),
+                width: 2,
+              ),
+            ),
+
+            child: Icon(
+              isCompleted
+                  ? Icons
+                      .check_rounded
+                  : null,
+
+              color: Colors.white,
+
+              size: 18,
+            ),
+          ),
+
+          const SizedBox(
+            height: 7,
+          ),
+
+          Text(
+            title,
+
+            maxLines: 1,
+
+            textAlign:
+                TextAlign.center,
+
+            style: TextStyle(
+              color: isActive
+                  ? brandPurple
+                  : greyText,
+
+              fontSize: 9,
+
+              fontWeight:
+                  isActive
+                      ? FontWeight
+                          .w800
+                      : FontWeight
+                          .w600,
+            ),
+          ),
+        ],
       ),
-      child: Center(
-        child: Text(
-          stepText,
-          style: TextStyle(
-            color: isActive ? Colors.white : inactiveColor,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
+    );
+  }
+
+  Widget _buildProgressLine({
+    required bool completed,
+  }) {
+    return Expanded(
+      child: Container(
+        height: 3,
+
+        margin:
+            const EdgeInsets.only(
+          bottom: 23,
+        ),
+
+        decoration:
+            BoxDecoration(
+          color: completed
+              ? brandPurple
+              : const Color(
+                  0xFFDCE2EA,
+                ),
+
+          borderRadius:
+              BorderRadius.circular(
+            10,
           ),
         ),
       ),
     );
   }
-}
 
-// Custom Painter to overlay camera stream and cutout mask
-class CameraOverlayPainter extends CustomPainter {
-  final bool isFace;
-  final bool isAligned;
-  final Color borderColor;
+  // =========================================================
+  // CAMERA CARD
+  // =========================================================
 
-  CameraOverlayPainter({
-    required this.isFace,
-    required this.isAligned,
-    required this.borderColor,
-  });
+  Widget _buildCameraCard() {
+    return Container(
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Canvas background overlay configuration
-    final overlayPaint = Paint()
-      ..color = Colors.black.withOpacity(0.65);
+      clipBehavior: Clip.antiAlias,
 
-    final maskPaint = Paint()
-      ..blendMode = BlendMode.dstOut
-      ..color = Colors.transparent;
+      decoration:
+          BoxDecoration(
+        color:
+            const Color(
+          0xFF080D15,
+        ),
 
-    // Save layer to process cutout blending properly
-    canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint());
-    
-    // 1. Draw solid background
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), overlayPaint);
+        borderRadius:
+            BorderRadius.circular(
+          30,
+        ),
 
-    final center = Offset(size.width / 2, size.height * 0.42);
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black
+                .withValues(
+              alpha: 0.14,
+            ),
 
-    if (isFace) {
-      // 2a. Face silhouette oval cutout
-      final faceWidth = size.width * 0.65;
-      final faceHeight = size.height * 0.45;
-      final faceRect = Rect.fromCenter(center: center, width: faceWidth, height: faceHeight);
-      
-      canvas.drawOval(faceRect, maskPaint);
-      
-      // Draw border overlay
-      final borderPaint = Paint()
-        ..color = borderColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = isAligned ? 3.5 : 2.0;
-      
-      canvas.drawOval(faceRect, borderPaint);
-    } else {
-      // 2b. Card document rectangle cutout
-      final cardWidth = size.width * 0.85;
-      final cardHeight = cardWidth * 0.63; // ID Document standard aspect ratio
-      final cardRect = Rect.fromCenter(center: center, width: cardWidth, height: cardHeight);
-      final rrect = RRect.fromRectAndRadius(cardRect, const Radius.circular(16));
-      
-      canvas.drawRRect(rrect, maskPaint);
+            blurRadius: 30,
 
-      // Draw corner brackets
-      final bracketPaint = Paint()
-        ..color = borderColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = isAligned ? 4.5 : 3.5
-        ..strokeCap = StrokeCap.round;
+            offset:
+                const Offset(
+              0,
+              15,
+            ),
+          ),
+        ],
+      ),
 
-      final double len = 24.0;
-      final double rad = 16.0;
+      child: Stack(
+        fit: StackFit.expand,
 
-      // Top Left Corner
-      canvas.drawPath(
-        Path()
-          ..moveTo(cardRect.left, cardRect.top + len)
-          ..lineTo(cardRect.left, cardRect.top + rad)
-          ..quadraticBezierTo(cardRect.left, cardRect.top, cardRect.left + rad, cardRect.top)
-          ..lineTo(cardRect.left + len, cardRect.top),
-        bracketPaint,
-      );
-      // Top Right Corner
-      canvas.drawPath(
-        Path()
-          ..moveTo(cardRect.right - len, cardRect.top)
-          ..lineTo(cardRect.right - rad, cardRect.top)
-          ..quadraticBezierTo(cardRect.right, cardRect.top, cardRect.right, cardRect.top + rad)
-          ..lineTo(cardRect.right, cardRect.top + len),
-        bracketPaint,
-      );
-      // Bottom Left Corner
-      canvas.drawPath(
-        Path()
-          ..moveTo(cardRect.left, cardRect.bottom - len)
-          ..lineTo(cardRect.left, cardRect.bottom - rad)
-          ..quadraticBezierTo(cardRect.left, cardRect.bottom, cardRect.left + rad, cardRect.bottom)
-          ..lineTo(cardRect.left + len, cardRect.bottom),
-        bracketPaint,
-      );
-      // Bottom Right Corner
-      canvas.drawPath(
-        Path()
-          ..moveTo(cardRect.right - len, cardRect.bottom)
-          ..lineTo(cardRect.right - rad, cardRect.bottom)
-          ..quadraticBezierTo(cardRect.right, cardRect.bottom, cardRect.right, cardRect.bottom + rad)
-          ..lineTo(cardRect.right, cardRect.bottom + len),
-        bracketPaint,
-      );
-    }
+        children: [
+          // Camera preview
 
-    canvas.restore();
+          if (_isCameraReady &&
+              _cameraController !=
+                  null)
+            _buildCameraPreview()
+          else
+            const Center(
+              child:
+                  CircularProgressIndicator(
+                color:
+                    brandGreen,
+              ),
+            ),
+
+          // Dark gradient
+
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration:
+                  BoxDecoration(
+                gradient:
+                    LinearGradient(
+                  begin:
+                      Alignment.topCenter,
+
+                  end:
+                      Alignment.bottomCenter,
+
+                  colors: [
+                    Colors.black
+                        .withValues(
+                      alpha: 0.35,
+                    ),
+
+                    Colors
+                        .transparent,
+
+                    Colors.black
+                        .withValues(
+                      alpha: 0.78,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Instruction badge
+
+          Positioned(
+            top: 20,
+            left: 20,
+            right: 20,
+
+            child: Center(
+              child:
+                  AnimatedContainer(
+                duration:
+                    const Duration(
+                  milliseconds:
+                      300,
+                ),
+
+                padding:
+                    const EdgeInsets
+                        .symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+
+                decoration:
+                    BoxDecoration(
+                  color:
+                      _isPositionReady
+                          ? brandGreen
+                          : Colors.black
+                              .withValues(
+                            alpha:
+                                0.55,
+                          ),
+
+                  borderRadius:
+                      BorderRadius
+                          .circular(
+                    30,
+                  ),
+                ),
+
+                child: Row(
+                  mainAxisSize:
+                      MainAxisSize
+                          .min,
+
+                  children: [
+                    Icon(
+                      _isPositionReady
+                          ? Icons
+                              .check_circle_rounded
+                          : Icons
+                              .center_focus_strong_rounded,
+
+                      color:
+                          Colors.white,
+
+                      size: 17,
+                    ),
+
+                    const SizedBox(
+                      width: 8,
+                    ),
+
+                    Text(
+                      _isPositionReady
+                          ? "POSITION READY"
+                          : "ALIGN IN THE GUIDE",
+
+                      style:
+                          const TextStyle(
+                        color:
+                            Colors.white,
+
+                        fontSize: 11,
+
+                        fontWeight:
+                            FontWeight
+                                .w800,
+
+                        letterSpacing:
+                            0.7,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Face or document guide
+
+          Center(
+            child:
+                _buildCaptureGuide(),
+          ),
+
+          // Camera controls
+
+          Positioned(
+            left: 18,
+            right: 18,
+            bottom: 20,
+
+            child: Row(
+              mainAxisAlignment:
+                  MainAxisAlignment
+                      .spaceBetween,
+
+              children: [
+                _buildSmallControl(
+                  icon: Icons
+                      .photo_library_outlined,
+
+                  onTap:
+                      _selectFromGallery,
+                ),
+
+                _buildCaptureButton(),
+
+                _buildSmallControl(
+                  icon: Icons
+                      .cameraswitch_rounded,
+
+                  onTap:
+                      _switchCamera,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  @override
-  bool shouldRepaint(covariant CameraOverlayPainter oldDelegate) =>
-      oldDelegate.isAligned != isAligned || oldDelegate.borderColor != borderColor;
+  // =========================================================
+  // CAMERA PREVIEW
+  // =========================================================
+
+  Widget _buildCameraPreview() {
+    final CameraController
+        controller =
+        _cameraController!;
+
+    return Center(
+      child: CameraPreview(
+        controller,
+      ),
+    );
+  }
+
+  // =========================================================
+  // CAPTURE GUIDE
+  // =========================================================
+
+  Widget _buildCaptureGuide() {
+    final bool isSelfie =
+        widget.step ==
+            KycStep.selfie;
+
+    return Container(
+      height:
+          isSelfie
+              ? 250
+              : 215,
+
+      width:
+          isSelfie
+              ? 245
+              : 310,
+
+      decoration:
+          BoxDecoration(
+        borderRadius:
+            BorderRadius.circular(
+          isSelfie
+              ? 125
+              : 25,
+        ),
+
+        border: Border.all(
+          color:
+              _isPositionReady
+                  ? brandGreen
+                  : Colors.white70,
+
+          width: 3,
+        ),
+
+        boxShadow: [
+          BoxShadow(
+            color:
+                (_isPositionReady
+                        ? brandGreen
+                        : Colors.white)
+                    .withValues(
+              alpha: 0.25,
+            ),
+
+            blurRadius: 20,
+
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================
+  // SMALL CAMERA CONTROL
+  // =========================================================
+
+  Widget _buildSmallControl({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white
+          .withValues(
+        alpha: 0.14,
+      ),
+
+      shape:
+          const CircleBorder(),
+
+      child: InkWell(
+        onTap: onTap,
+
+        customBorder:
+            const CircleBorder(),
+
+        child: SizedBox(
+          height: 54,
+          width: 54,
+
+          child: Icon(
+            icon,
+
+            color:
+                Colors.white,
+
+            size: 24,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // CAPTURE BUTTON
+  // =========================================================
+
+  Widget _buildCaptureButton() {
+    return GestureDetector(
+      onTap:
+          _isCapturing
+              ? null
+              : _capturePhoto,
+
+      child: Container(
+        height: 78,
+        width: 78,
+
+        padding:
+            const EdgeInsets.all(
+          5,
+        ),
+
+        decoration:
+            BoxDecoration(
+          color:
+              Colors.white,
+
+          shape:
+              BoxShape.circle,
+
+          boxShadow: [
+            BoxShadow(
+              color: brandGreen
+                  .withValues(
+                alpha: 0.45,
+              ),
+
+              blurRadius: 22,
+
+              spreadRadius: 4,
+            ),
+          ],
+        ),
+
+        child: Container(
+          decoration:
+              BoxDecoration(
+            color:
+                brandGreen,
+
+            shape:
+                BoxShape.circle,
+
+            border:
+                Border.all(
+              color:
+                  const Color(
+                0xFF083B35,
+              ),
+
+              width: 2,
+            ),
+          ),
+
+          child:
+              _isCapturing
+                  ? const Padding(
+                      padding:
+                          EdgeInsets
+                              .all(
+                        17,
+                      ),
+
+                      child:
+                          CircularProgressIndicator(
+                        color:
+                            Colors
+                                .white,
+
+                        strokeWidth:
+                            3,
+                      ),
+                    )
+                  : const Icon(
+                      Icons
+                          .camera_alt_rounded,
+
+                      color:
+                          Colors.white,
+
+                      size: 29,
+                    ),
+        ),
+      ),
+    );
+  }
 }

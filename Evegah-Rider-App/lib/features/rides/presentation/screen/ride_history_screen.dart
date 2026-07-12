@@ -121,8 +121,10 @@ class _RideHistoryScreenState extends State<RideHistoryScreen> with SingleTicker
           unselectedLabelColor: Colors.grey,
           indicatorColor: const Color(0xFF4313B8),
           indicatorWeight: 3,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 8.0), // 🚨 REDUCE: Tightens the space between tabs
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
           unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+          
           tabs: const [
             Tab(text: "Upcoming"),
             Tab(text: "Ongoing"),
@@ -177,55 +179,68 @@ class _RideHistoryScreenState extends State<RideHistoryScreen> with SingleTicker
     );
   }
 
-  // --- ONGOING TAB ---
-  Widget _buildOngoingTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _buildBookingCard(
-            status: "ONGOING",
-            statusColor: const Color(0xFFDCFCE7),
-            textColor: const Color(0xFF16A34A),
-            price: "₹116.00",
-            vehicleName: "EVegah City",
-            bookingId: "EVG87654321",
-            dateTime: "15 May 2024, 08:00 AM - 02:00 PM",
-            location: "Indiranagar 100ft Road\nNear BDA Complex, Bengaluru",
-            duration: "6 Hours",
-            extraWidget: Container(
-              margin: const EdgeInsets.only(top: 14),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F3FF),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.timer_outlined, color: Color(0xFF4313B8), size: 16),
-                  const SizedBox(width: 8),
-                  const Text("Time Left ", style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
-                  const Text("02h 35m", style: TextStyle(color: Color(0xFF4313B8), fontSize: 12, fontWeight: FontWeight.w900)),
-                  const Spacer(),
-                  const Text("Return Before ", style: TextStyle(color: Colors.grey, fontSize: 10)),
-                  const Text("02:00 PM, 15 May 2024", style: TextStyle(color: Color(0xFF1E293B), fontSize: 10, fontWeight: FontWeight.bold)),
-                ],
-              ),
+ Widget _buildOngoingTab() {
+  return SingleChildScrollView(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      children: [
+        _buildBookingCard(
+          status: "ONGOING",
+          statusColor: const Color(0xFFDCFCE7),
+          textColor: const Color(0xFF16A34A),
+          price: "₹116.00",
+          vehicleName: "EVegah City",
+          bookingId: "EVG87654321",
+          dateTime: "15 May 2024, 08:00 AM - 02:00 PM",
+          location: "Indiranagar 100ft Road\nNear BDA Complex, Bengaluru",
+          duration: "6 Hours",
+          extraWidget: Container(
+            margin: const EdgeInsets.only(top: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F3FF),
+              borderRadius: BorderRadius.circular(12),
             ),
-            buttons: [
-              _buildOutlinedCardButton("Extend Ride", () {}),
-              const SizedBox(width: 12),
-              _buildOutlinedCardButton("View Details", () {}),
-              const SizedBox(width: 12),
-              _buildSolidCardButton("End Ride", () {}),
-            ],
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.timer_outlined, color: Color(0xFF4313B8), size: 16),
+                    const SizedBox(width: 8),
+                    const Text("Time Left ", style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+                    const Text("02h 35m", style: TextStyle(color: Color(0xFF4313B8), fontSize: 12, fontWeight: FontWeight.w900)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Text("Return Before ", style: TextStyle(color: Colors.grey, fontSize: 10)),
+                    Expanded(
+                      child: Text(
+                        "02:00 PM, 15 May 2024",
+                        textAlign: TextAlign.left,
+                        style: const TextStyle(color: Color(0xFF1E293B), fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 20),
-          _buildSupportCard(),
-        ],
-      ),
-    );
-  }
+          buttons: [
+            _buildOutlinedCardButton("Extend Ride", () {}),
+            const SizedBox(width: 12),
+            _buildOutlinedCardButton("View Details", () {}),
+            const SizedBox(width: 12),
+            _buildSolidCardButton("End Ride", () {}),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _buildSupportCard(),
+      ],
+    ),
+  );
+}
 
   // --- COMPLETED TAB ---
   Widget _buildCompletedTab() {

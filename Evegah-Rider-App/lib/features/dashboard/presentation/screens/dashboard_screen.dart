@@ -6,7 +6,7 @@ import 'rent_ev_screen.dart';
 import 'vehicle_list_screen.dart';
 import 'select_location_screen.dart';
 import 'select_date_time_screen.dart';
-
+import '../../../notifications/presentation/screens/notification_screen.dart';
 import '../../../offers/presentation/screens/payment_offers_screen.dart';
 import '../../../rides/presentation/screen/ride_history_screen.dart';
 import '../../../wallet/presentation/screens/wallet_screen.dart';
@@ -206,7 +206,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Location Selector Chip Button
+          // --- Left Side: Location Selector Chip Button ---
           InkWell(
             onTap: () async {
               final result = await Navigator.push(
@@ -273,46 +273,81 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
 
-          // Right Notification Bell Badge
-          Stack(
+          // --- Right Side: Notification Bell & Hamburger Menu ---
+          Row(
             children: [
-              InkWell(
-                onTap: () {
-                  Scaffold.of(context).openDrawer();
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
+              // 1. Notification Bell
+              Stack(
+                children: [
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const NotificationScreen()),
+                      );
+                    },
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: const Icon(
-                    Icons.notifications_none_rounded,
-                    color: Color(0xFF0F172A),
-                    size: 20,
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 2,
-                right: 2,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF200F54),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Text(
-                    "3",
-                    style: TextStyle(
-                      fontSize: 8,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: const Icon(
+                        Icons.notifications_none_rounded,
+                        color: Color(0xFF0F172A),
+                        size: 20,
+                      ),
                     ),
                   ),
-                ),
+                  Positioned(
+                    top: 2,
+                    right: 2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF200F54),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Text(
+                        "3",
+                        style: TextStyle(
+                          fontSize: 8,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(width: 8),
+
+              // 2. Hamburger App Drawer Menu
+              Builder(
+                builder: (context) {
+                  return InkWell(
+                    onTap: () {
+                      Scaffold.of(context).openDrawer(); // Opens the sidebar
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: const Icon(
+                        Icons.menu_rounded,
+                        color: Color(0xFF0F172A),
+                        size: 20,
+                      ),
+                    ),
+                  );
+                }
               ),
             ],
           ),
@@ -932,7 +967,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Our EV Fleet Section
+ // Our EV Fleet Section
   // REQUIREMENT: "when we click on any vehicle navigate to the Rent Your EV page"
   Widget _buildOurEvFleetSection() {
     return Column(
@@ -980,7 +1015,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 200,
+          height: 215, // 🚨 Increased height slightly to accommodate wrapped feature badges safely
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: _evFleet.length,
@@ -988,7 +1023,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               final item = _evFleet[index];
               return GestureDetector(
                 onTap: () {
-                  // REQUIREMENT: Navigate to Rent Your EV page when clicking ANY vehicle!
+                  // 🟢 WIRED UP: Navigate directly to Rent Your EV page when clicking ANY vehicle!
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -1120,28 +1155,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 6),
 
                       // Feature Pills
-                      Row(
-                        children: (item["features"] as List<String>).map((f) {
-                          return Container(
-                            margin: const EdgeInsets.only(right: 4),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF5F3FF),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              f,
-                              style: const TextStyle(
-                                fontSize: 7,
-                                color: Color(0xFF4313B8),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          );
-                        }).toList(),
+                      // 🚨 FIX: Swapped out Row for Wrap to dynamically stack tightly bound cards safely
+                     // Feature Pills
+                      // 🟢 FittedBox forces them onto one single line and scales down safely if needed
+                      SizedBox(
+                        width: double.infinity,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            children: (item["features"] as List<String>).map((f) {
+                              return Container(
+                                margin: const EdgeInsets.only(right: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF5F3FF),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  f,
+                                  style: const TextStyle(
+                                    fontSize: 7,
+                                    color: Color(0xFF4313B8),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
                       ),
                     ],
                   ),
