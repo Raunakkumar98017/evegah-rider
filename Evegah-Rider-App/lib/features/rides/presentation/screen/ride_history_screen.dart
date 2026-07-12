@@ -179,7 +179,6 @@ class _RideHistoryScreenState extends State<RideHistoryScreen> with SingleTicker
     );
   }
 
-  // --- ONGOING TAB ---
  Widget _buildOngoingTab() {
   return SingleChildScrollView(
     padding: const EdgeInsets.all(16),
