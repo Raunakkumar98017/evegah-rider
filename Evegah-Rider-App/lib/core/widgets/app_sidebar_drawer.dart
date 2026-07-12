@@ -263,14 +263,14 @@ class AppSidebarDrawer extends StatelessWidget {
     );
   }
 
-  Widget _buildDrawerTile({
+ Widget _buildDrawerTile({
     required BuildContext context,
     required IconData icon,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
-    String? badge,
-    Color? badgeColor,
+    String? badge,      // Kept in parameters so existing calls don't break,
+    Color? badgeColor,  // but completely ignored in the UI render.
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
@@ -293,32 +293,19 @@ class AppSidebarDrawer extends StatelessWidget {
         ),
         title: Row(
           children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF0F172A),
+            // 🚨 EXPANDED TAKES UP THE FULL WIDTH NOW THAT BADGES ARE REMOVED
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis, // Elegantly clips text if the screen is extremely small
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
               ),
             ),
-            if (badge != null) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: (badgeColor ?? const Color(0xFF4313B8)).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  badge,
-                  style: TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    color: badgeColor ?? const Color(0xFF4313B8),
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
         subtitle: Text(
@@ -331,5 +318,5 @@ class AppSidebarDrawer extends StatelessWidget {
         trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFF94A3B8)),
       ),
     );
-  }
-}
+  }}
+  
