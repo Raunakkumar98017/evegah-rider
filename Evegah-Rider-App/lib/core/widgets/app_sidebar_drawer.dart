@@ -4,7 +4,6 @@ import '../../features/dashboard/presentation/screens/rent_ev_screen.dart';
 import '../../features/dashboard/presentation/screens/select_location_screen.dart';
 import '../../features/dashboard/presentation/screens/select_date_time_screen.dart';
 import '../../features/dashboard/presentation/screens/vehicle_list_screen.dart';
-
 import '../../features/offers/presentation/screens/offer_screen.dart';
 import '../../features/rides/presentation/screen/ride_history_screen.dart';
 import '../../features/wallet/presentation/screens/wallet_screen.dart';
@@ -16,20 +15,24 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 class AppSidebarDrawer extends StatelessWidget {
   const AppSidebarDrawer({super.key});
 
- void _navigateTo(BuildContext context, Widget screen) {
-  // 1. Close the drawer
-  Navigator.pop(context);
+  // 1. Dashboard Helper (Wipes stack)
+  void _navigateToDashboard(BuildContext context) {
+    Navigator.pop(context);
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const DashboardScreen()),
+      (route) => false,
+    );
+  }
 
-  // 2. Clear the entire navigation stack and push the new screen as the new "home"
-  Navigator.pushAndRemoveUntil(
-    context,
-    MaterialPageRoute(
-      builder: (context) => screen,
-      settings: RouteSettings(name: screen.runtimeType.toString()),
-    ),
-    (route) => false, // This wipes the history clean
-  );
-}
+  // 2. Sub-page Helper (Keeps dashboard in stack so 'Back' works)
+  void _navigateToSubPage(BuildContext context, Widget screen) {
+    Navigator.pop(context);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => screen),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,280 +40,233 @@ class AppSidebarDrawer extends StatelessWidget {
       backgroundColor: const Color(0xFFFAFBFE),
       child: Column(
         children: [
-         // --- HEADER WITH LOGO & BRANDING ---
+          // =================================================
+// RIDER PROFILE HEADER
+// =================================================
+
+Container(
+  width: double.infinity,
+
+  padding: EdgeInsets.fromLTRB(
+    22,
+    MediaQuery.of(context).padding.top + 28,
+    20,
+    30,
+  ),
+
+  decoration: const BoxDecoration(
+    color: Color(0xFF24105E),
+
+    borderRadius: BorderRadius.only(
+      bottomRight: Radius.circular(42),
+    ),
+  ),
+
+  child: Material(
+    color: Colors.transparent,
+
+    child: InkWell(
+      onTap: () {
+  _navigateToSubPage(
+    context,
+    const ProfileScreen(),
+  );
+},
+
+      borderRadius: BorderRadius.circular(24),
+
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+
+        children: [
+
+          // =================================================
+          // PROFILE ICON
+          // =================================================
+
           Container(
-            width: double.infinity,
-            // 🚨 FIX: Removed the hardcoded 'height: 170' so it adapts to the large logo without crashing
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 10,
-              bottom: 20,
-              left: 20,
-              right: 20,
+            height: 55,
+            width: 55,
+
+            decoration: BoxDecoration(
+              color: const Color(0xFF8CE600),
+
+              borderRadius: BorderRadius.circular(23),
             ),
-            decoration: const BoxDecoration(
-              color: Color(0xFF200F54), // Deep brand purple
-              borderRadius: BorderRadius.only(
-                bottomRight: Radius.circular(24),
-              ),
+
+            child: const Icon(
+              Icons.person_rounded,
+              color: Color(0xFF24105E),
+              size: 32,
             ),
+          ),
+
+          const SizedBox(
+            width: 16,
+          ),
+
+          // =================================================
+          // PROFILE INFORMATION
+          // =================================================
+
+          Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min, // 🚨 FIX: Tells the purple box to wrap tightly around the content
+              mainAxisSize: MainAxisSize.min,
+
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start, // Keeps the X button aligned near the top
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-                      child: Image.asset(
-                        'assets/logo.png',
-                        height: 80, // Your large logo size
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.bolt, color: Color(0xFF8CE600), size: 48),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, color: Colors.white70),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
+
+                // Rider name
+
+                const Text(
+                  "Hello, Rider!",
+
+                  maxLines: 1,
+
+                  overflow: TextOverflow.ellipsis,
+
+                  style: TextStyle(
+                    color: Colors.white,
+
+                    fontSize: 21,
+
+                    fontWeight: FontWeight.w800,
+
+                    letterSpacing: -0.4,
+                  ),
                 ),
-                const SizedBox(height: 12), // Space between your large logo and the text below
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      "Ride Green, Save More",
-                      style: TextStyle(
-                        color: Color(0xFF8CE600),
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+
+                const SizedBox(
+                  height: 5,
+                ),
+
+                // Profile description
+
+                 Transform.translate(
+                  offset: Offset(-3, 0),
+
+                  child: Row(
+                    children: [
+
+                      Icon(
+                        Icons.bolt_rounded,
+
+                        color: Color(
+                          0xFF8CE600,
+                        ),
+
+                        size: 18,
                       ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      "Navigation Menu & Quick Page Inspector",
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 10,
+
+                      SizedBox(
+                        width: 1,
                       ),
-                    ),
-                  ],
+
+                      Expanded(
+                        child: Text(
+                          "View and edit your profile",
+
+                          maxLines: 1,
+
+                          overflow:
+                              TextOverflow.ellipsis,
+
+                          style: TextStyle(
+                            color: Colors.white70,
+
+                            fontSize: 10,
+
+                            fontWeight:
+                                FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
 
-          // --- MENU ITEMS LIST ---
+          const SizedBox(
+            width: 10,
+          ),
+
+          // =================================================
+          // ARROW BUTTON
+          // =================================================
+
+          Container(
+            height: 43,
+            width: 43,
+
+            decoration: BoxDecoration(
+              color: Colors.white12,
+
+              borderRadius: BorderRadius.circular(
+                14,
+              ),
+            ),
+
+            child: const Icon(
+              Icons.chevron_right_rounded,
+
+              color: Colors.white70,
+
+              size: 28,
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
+),
+          // Menu
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               children: [
-                // SECTION 1: BOOKING & VEHICLES
                 _buildSectionHeader("EV BOOKING & FLOWS"),
-                _buildDrawerTile(
-                  context: context,
-                  icon: Icons.dashboard_rounded,
-                  title: "Dashboard Home",
-                  subtitle: "Main rider dashboard",
-                  badge: "Home",
-                  badgeColor: const Color(0xFF4313B8),
-                  onTap: () => _navigateTo(context, const DashboardScreen()),
-                ),
-                _buildDrawerTile(
-                  context: context,
-                  icon: Icons.electric_scooter_rounded,
-                  title: "Rent Your EV",
-                  subtitle: "Search & overview page",
-                  badge: "New UI",
-                  badgeColor: const Color(0xFF16A34A),
-                  onTap: () => _navigateTo(context, const RentEvScreen()),
-                ),
-                _buildDrawerTile(
-                  context: context,
-                  icon: Icons.location_on_rounded,
-                  title: "Select Zone & Location",
-                  subtitle: "Find zones near you",
-                  badge: "Zones",
-                  badgeColor: const Color(0xFF0284C7),
-                  onTap: () => _navigateTo(
-                    context,
-                    SelectLocationScreen(
-                      currentCity: "Vadodara",
-                      onLocationSelected: (city) {},
-                    ),
-                  ),
-                ),
-                _buildDrawerTile(
-                  context: context,
-                  icon: Icons.calendar_month_rounded,
-                  title: "Select Package & Dates",
-                  subtitle: "Package & hourly date picker",
-                  badge: "Dates",
-                  badgeColor: const Color(0xFFEA580C),
-                  onTap: () => _navigateTo(context, const SelectDateTimeScreen()),
-                ),
-                _buildDrawerTile(
-                  context: context,
-                  icon: Icons.two_wheeler_rounded,
-                  title: "Choose Your EV",
-                  subtitle: "Vehicle selection list",
-                  badge: "Fleet",
-                  badgeColor: const Color(0xFF4313B8),
-                  onTap: () => _navigateTo(context, const VehicleListScreen()),
-                ),
-
+                _buildDrawerTile(context, Icons.dashboard_rounded, "Dashboard Home", "Main rider dashboard", () => _navigateToDashboard(context)),
+                _buildDrawerTile(context, Icons.electric_scooter_rounded, "Rent Your EV", "Search & overview page", () => _navigateToSubPage(context, const RentEvScreen())),
+                _buildDrawerTile(context, Icons.location_on_rounded, "Select Zone & Location", "Find zones near you", () => _navigateToSubPage(context, SelectLocationScreen(currentCity: "Vadodara", onLocationSelected: (city) {}))),
+                _buildDrawerTile(context, Icons.calendar_month_rounded, "Select Package & Dates", "Package & hourly date picker", () => _navigateToSubPage(context, const SelectDateTimeScreen())),
+                _buildDrawerTile(context, Icons.two_wheeler_rounded, "Choose Your EV", "Vehicle selection list", () => _navigateToSubPage(context, const VehicleListScreen())),
+                
                 const Divider(height: 24, indent: 12, endIndent: 12),
-
-                // SECTION 2: RIDER SERVICES & ACCOUNT
+                
                 _buildSectionHeader("SERVICES & ACCOUNT"),
-                _buildDrawerTile(
-                  context: context,
-                  icon: Icons.payments_rounded,
-                  title: "Payments & Offers",
-                  subtitle: "Checkout & promo discounts",
-                  onTap: () => _navigateTo(context, const OfferScreen()),
-                ),
-                _buildDrawerTile(
-                  context: context,
-                  icon: Icons.history_rounded,
-                  title: "My Rides & History",
-                  subtitle: "Active and past bookings",
-                  onTap: () => _navigateTo(context, const RideHistoryScreen()),
-                ),
-                _buildDrawerTile(
-                  context: context,
-                  icon: Icons.account_balance_wallet_rounded,
-                  title: "Wallet & Transactions",
-                  subtitle: "Balance and payment methods",
-                  onTap: () => _navigateTo(context, const WalletScreen()),
-                ),
-                _buildDrawerTile(
-                  context: context,
-                  icon: Icons.person_rounded,
-                  title: "My Profile",
-                  subtitle: "Personal information & stats",
-                  onTap: () => _navigateTo(context, const ProfileScreen()),
-                ),
-                _buildDrawerTile(
-                  context: context,
-                  icon: Icons.verified_user_rounded,
-                  title: "KYC Verification",
-                  subtitle: "Identity & Aadhaar OCR flow",
-                  badge: "E-KYC",
-                  badgeColor: const Color(0xFF16A34A),
-                  onTap: () => _navigateTo(context, const KycScreen()),
-                ),
-                _buildDrawerTile(
-                  context: context,
-                  icon: Icons.qr_code_scanner_rounded,
-                  title: "Scan to Ride (QR)",
-                  subtitle: "QR scanner vehicle unlock",
-                  onTap: () => _navigateTo(context, const ScanQrScreen()),
-                ),
-                _buildDrawerTile(
-                  context: context,
-                  icon: Icons.login_rounded,
-                  title: "Auth / Login",
-                  subtitle: "Phone & Google sign-in",
-                  onTap: () => _navigateTo(context, const LoginScreen()),
-                ),
+                _buildDrawerTile(context, Icons.payments_rounded, "Payments & Offers", "Checkout & promo discounts", () => _navigateToSubPage(context, const OfferScreen())),
+                _buildDrawerTile(context, Icons.history_rounded, "My Rides & History", "Active and past bookings", () => _navigateToSubPage(context, const RideHistoryScreen())),
+                _buildDrawerTile(context, Icons.account_balance_wallet_rounded, "Wallet & Transactions", "Balance and payment methods", () => _navigateToSubPage(context, const WalletScreen())),
+                _buildDrawerTile(context, Icons.person_rounded, "My Profile", "Personal information & stats", () => _navigateToSubPage(context, const ProfileScreen())),
+                _buildDrawerTile(context, Icons.verified_user_rounded, "KYC Verification", "Identity & Aadhaar [Redacted]", () => _navigateToSubPage(context, const KycScreen())),
+                _buildDrawerTile(context, Icons.qr_code_scanner_rounded, "Scan to Ride (QR)", "QR scanner vehicle unlock", () => _navigateToSubPage(context, const ScanQrScreen())),
+                _buildDrawerTile(context, Icons.login_rounded, "Auth / Login", "Phone & Google sign-in", () => _navigateToSubPage(context, const LoginScreen())),
               ],
             ),
           ),
-
-          // --- FOOTER NOTE ---
-          /*Container(
-            padding: const EdgeInsets.all(14),
-            color: const Color(0xFFF1F5F9),
-            child: Row(
-              children: const [
-                Icon(Icons.check_circle_outline_rounded, size: 14, color: Color(0xFF16A34A)),
-                SizedBox(width: 8),
-                Text(
-                  "Evegah Rider App v1.0 • All Pages Mapped",
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-              ],
-            ),
-          ),*/
         ],
       ),
     );
   }
 
   Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF94A3B8),
-          letterSpacing: 0.8,
-        ),
-      ),
-    );
+    return Padding(padding: const EdgeInsets.fromLTRB(12, 12, 12, 6), child: Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8), letterSpacing: 0.8)));
   }
 
-  Widget _buildDrawerTile({
-    required BuildContext context,
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    String? badge,
-    Color? badgeColor,
-  }) {
+  Widget _buildDrawerTile(BuildContext context, IconData icon, String title, String subtitle, VoidCallback onTap) {
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFF1F5F9))),
       child: ListTile(
         onTap: onTap,
         dense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF5F3FF),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: const Color(0xFF4313B8), size: 20),
-        ),
-        title: Row(
-          children: [
-            // Expanded allows the text to take up the full row width, preventing overflows
-            Expanded(
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-            ),
-          ],
-        ),
-        subtitle: Text(
-          subtitle,
-          style: const TextStyle(
-            fontSize: 10,
-            color: Color(0xFF64748B),
-          ),
-        ),
+        leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFFF5F3FF), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: const Color(0xFF4313B8), size: 20)),
+        title: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
         trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFF94A3B8)),
       ),
     );
