@@ -121,8 +121,10 @@ class _RideHistoryScreenState extends State<RideHistoryScreen> with SingleTicker
           unselectedLabelColor: Colors.grey,
           indicatorColor: const Color(0xFF4313B8),
           indicatorWeight: 3,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 8.0), // 🚨 REDUCE: Tightens the space between tabs
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
           unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+          
           tabs: const [
             Tab(text: "Upcoming"),
             Tab(text: "Ongoing"),
